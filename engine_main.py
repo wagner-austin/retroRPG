@@ -102,6 +102,7 @@ def run_engine(stdscr,
 
     # Non-blocking input
     stdscr.nodelay(True)
+    stdscr.timeout(0)
 
     # Center camera
     center_camera_on_player(model, stdscr, map_top_offset)
