@@ -1,5 +1,5 @@
 # FileName: play_runner.py
-# version: 1.6 (Use dict-of-lists for placed_scenery to avoid any raw strings)
+# version: 1.8 (Robust fix: use player_x/player_y from map if not generated)
 
 import os
 import json
@@ -24,7 +24,9 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     # 1) Load or parse raw map data
     if isinstance(filename_or_data, dict):
         raw_data = filename_or_data
+        model_filename = None  # new, so must prompt on quick-save
     else:
+        model_filename = filename_or_data  # existing file => can overwrite
         maps_dir = "maps"
         load_path = os.path.join(maps_dir, filename_or_data)
         try:
@@ -42,17 +44,24 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     # 3) Load or create the Player
     player = load_player()  # from character/character_data.json
     if not player:
-        # Start a fresh player if none saved
         player = Player()
 
-    # Force center if newly generated, or clamp if existing
+    # 4) If newly generated, center player. Otherwise, if map_data has coords, use them.
     if is_generated:
         player.x = world_width // 2
         player.y = world_height // 2
+    else:
+        px = raw_data.get("player_x", None)
+        py = raw_data.get("player_y", None)
+        if px is not None and py is not None:
+            player.x = px
+            player.y = py
+
+    # 5) Clamp to boundaries
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # 4) Build placed_scenery as a dictionary of lists for layering/efficiency
+    # 6) Build placed_scenery as a dict-of-lists
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
@@ -60,7 +69,7 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
 
-    # 5) Run the engine in 'editor' mode
+    # 7) Run the engine in 'editor' mode
     context = GameContext(mode_name="editor")
     run_engine(
         stdscr,
@@ -70,13 +79,14 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
         respawn_list=None,
         map_top_offset=3,
         world_width=world_width,
-        world_height=world_height
+        world_height=world_height,
+        loaded_map_filename=None if is_generated else model_filename
     )
 
-    # 6) After user quits the editor (press 'y'), save the player
+    # 8) After user quits, save the player data
     save_player(player)
 
-    # 7) If it's a generated map, prompt to save
+    # 9) If it's a generated map, prompt for saving
     if is_generated:
         ask_save_generated_map(
             stdscr,
@@ -95,8 +105,12 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     If this map was generated (is_generated=True), prompt to save scenery.
     """
     if isinstance(filename_or_data, dict):
+        # newly generated => must prompt on quick-save
         raw_data = filename_or_data
+        model_filename = None
     else:
+        # loaded from an existing file => can overwrite
+        model_filename = filename_or_data
         maps_dir = "maps"
         load_path = os.path.join(maps_dir, filename_or_data)
         try:
@@ -115,14 +129,22 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     if not player:
         player = Player()
 
-    # Force center if newly generated, or clamp if existing
+    # 2) If newly generated, center. Else, if coords exist in file, use them.
     if is_generated:
         player.x = world_width // 2
         player.y = world_height // 2
+    else:
+        px = raw_data.get("player_x", None)
+        py = raw_data.get("player_y", None)
+        if px is not None and py is not None:
+            player.x = px
+            player.y = py
+
+    # 3) Clamp
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # 2) Build placed_scenery as a dictionary of lists
+    # 4) Build placed_scenery
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
@@ -130,7 +152,7 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
 
-    # 3) Run the engine in 'play' mode
+    # 5) Run the engine in 'play' mode
     ctx = GameContext(mode_name="play")
     run_engine(
         stdscr,
@@ -140,13 +162,14 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
         respawn_list=[],
         map_top_offset=3,
         world_width=world_width,
-        world_height=world_height
+        world_height=world_height,
+        loaded_map_filename=None if is_generated else model_filename
     )
 
-    # 4) Once user quits (presses 'y'), save the Player
+    # 6) Once user quits, save the Player
     save_player(player)
 
-    # 5) If it's a generated map, ask if they want to save
+    # 7) If it's a generated map, ask if they want to save
     if is_generated:
         ask_save_generated_map(
             stdscr,
@@ -160,19 +183,16 @@ def ask_save_generated_map(stdscr, placed_scenery, world_width, world_height):
     """
     Displays a minimal yes/no prompt on the existing screen (no clear).
     If 'y', save scenery. Otherwise skip saving.
-
-    Note: When saving, you'll want to convert your dict-of-lists back to
-    an array of {"x","y","definition_id"} for JSON.
     """
     max_h, max_w = stdscr.getmaxyx()
     prompt = "Save this generated map? (y/n)"
 
-    row = max_h - 2
-    col = 2
-
     curses.curs_set(0)
     stdscr.nodelay(False)
     stdscr.keypad(True)
+
+    row = max_h - 2
+    col = 2
 
     try:
         stdscr.addstr(row, col, prompt, curses.A_BOLD)
@@ -190,7 +210,7 @@ def ask_save_generated_map(stdscr, placed_scenery, world_width, world_height):
         elif key in (ord('n'), ord('N'), ord('q'), 27):  # ESC
             break
 
-    # Optional: remove the prompt
+    # Clean up the prompt
     try:
         stdscr.addstr(row, col, " " * len(prompt))
         stdscr.refresh()

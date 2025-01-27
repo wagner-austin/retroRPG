@@ -1,5 +1,5 @@
 # FileName: engine_main.py
-# version: 2.9 (Now storing scenery in model.placed_scenery as a dict of lists)
+# version: 2.11 (Adds loaded_map_filename param to run_engine)
 
 import curses
 
@@ -14,7 +14,6 @@ from engine_render import (
     mark_dirty,
     update_partial_tiles_in_view
 )
-# [CHANGED] Import draw_screen_frame from ui_main instead of manually drawing border or debug
 from ui_main import draw_screen_frame
 from color_init import color_pairs
 from scenery_main import (
@@ -65,32 +64,27 @@ def run_engine(stdscr,
                respawn_list=None,
                map_top_offset=3,
                world_width=100,
-               world_height=60):
+               world_height=60,
+               loaded_map_filename=None):
     """
     Main loop for both play and editor modes.
-    Uses partial/delta redraw for performance.
 
-    - 'placed_scenery' can be either a dict or a list. 
-      We unify it into model.placed_scenery as a dict-of-lists:
-         (x, y) -> [SceneryObject(s), ...]
-    - Collisions, rendering, partial scrolling all reference model.placed_scenery.
-    - Press 'y' to quit => caller handles final player save.
+    :param loaded_map_filename: If not None, quick-save overwrites this file;
+                               else we prompt for a new filename.
     """
-
     model = GameModel()
     model.player = player
     model.world_width = world_width
     model.world_height = world_height
     model.context = context
 
-    # -------------------------------------------------------
-    # 1) Convert 'placed_scenery' into a dict-of-lists if needed
-    # -------------------------------------------------------
+    # Store the loaded filename in the model
+    model.loaded_map_filename = loaded_map_filename
+
+    # Convert 'placed_scenery' into a dict-of-lists if needed
     if isinstance(placed_scenery, dict):
-        # Already a dict-of-lists
         model.placed_scenery = placed_scenery
     else:
-        # It's a list => build a dict so collisions, partial redraw, etc. work
         dict_scenery = {}
         for obj in placed_scenery:
             if hasattr(obj, 'x') and hasattr(obj, 'y'):
@@ -105,21 +99,15 @@ def run_engine(stdscr,
     if context.enable_editor_commands:
         dynamic_defs = get_placeable_scenery_defs()
         model.editor_scenery_list = [(def_id, None, None) for def_id in dynamic_defs]
-        model.editor_scenery_index = 0
-
-        # [ADDED for Undo] Initialize an undo stack
-        model.editor_undo_stack = []
 
     # Non-blocking input
     stdscr.nodelay(True)
 
-    # Center camera on player 
+    # Center camera
     center_camera_on_player(model, stdscr, map_top_offset)
 
     def full_redraw(stdscr):
-        # Clear screen
         stdscr.clear()
-        # [CHANGED] Draw a border + debug label at top-right
         draw_screen_frame(stdscr, "UI_CYAN")
 
         # Editor or inventory line
@@ -141,14 +129,13 @@ def run_engine(stdscr,
             )
             try:
                 stdscr.addstr(
-                    1, 2, 
-                    inv_text, 
+                    1, 2,
+                    inv_text,
                     curses.color_pair(color_pairs["WHITE_TEXT"])
                 )
             except:
                 pass
 
-        # Clear any previous dirty tiles
         model.dirty_tiles.clear()
 
     model.full_redraw_needed = True
@@ -157,20 +144,20 @@ def run_engine(stdscr,
         key = stdscr.getch()
         did_move = False
 
-        # CAMERA (dead-zone logic)
+        # CAMERA
         max_scr_rows, max_scr_cols = stdscr.getmaxyx()
         visible_cols = max_scr_cols
         visible_rows = max_scr_rows - map_top_offset
 
         old_cam_x, old_cam_y = model.camera_x, model.camera_y
         model.camera_x, model.camera_y = update_camera_with_deadzone(
-            model.player.x, 
+            model.player.x,
             model.player.y,
-            model.camera_x, 
+            model.camera_x,
             model.camera_y,
-            visible_cols, 
+            visible_cols,
             visible_rows,
-            model.world_width, 
+            model.world_width,
             model.world_height,
             dead_zone=2
         )
@@ -178,7 +165,6 @@ def run_engine(stdscr,
         dx = model.camera_x - old_cam_x
         dy = model.camera_y - old_cam_y
 
-        # If camera jumped >1 => full redraw, else partial scroll
         if abs(dx) > 1 or abs(dy) > 1:
             model.full_redraw_needed = True
         else:
@@ -187,9 +173,8 @@ def run_engine(stdscr,
             if dx in (1, -1):
                 partial_scroll_horizontal(model, stdscr, dx, map_top_offset)
 
-        # HANDLE USER INPUT
         if key != -1:
-            did_move, should_quit = handle_common_keys(key, model, lambda x, y: mark_dirty(model, x, y))
+            did_move, should_quit = handle_common_keys(key, model, stdscr, lambda x, y: mark_dirty(model, x, y))
             if should_quit:
                 break
 
@@ -208,16 +193,11 @@ def run_engine(stdscr,
             )
 
         # ENGINE UPDATES
-        # 1) Networking
         handle_network(model)
-
-        # 2) NPC
         update_npcs(model, lambda x, y: mark_dirty(model, x, y))
-
-        # 3) Resource respawns
         handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
 
-        # 4) Sliding if no manual move
+        # Sliding
         if model.context.enable_sliding and not did_move:
             tile_def_id = get_scenery_def_id_at(
                 model.player.x,
@@ -237,13 +217,10 @@ def run_engine(stdscr,
                 mark_dirty(model, old_x, old_y)
                 mark_dirty(model, model.player.x, model.player.y)
 
-        # 5) Action flash
         update_action_flash(model, lambda x, y: mark_dirty(model, x, y))
-
-        # 6) Scene transitions
         handle_transitions(model, lambda x, y: mark_dirty(model, x, y))
 
-        # RENDER / DRAW
+        # DRAW
         if model.full_redraw_needed:
             full_redraw(stdscr)
             for wx in range(model.camera_x, min(model.camera_x + visible_cols, model.world_width)):
@@ -251,7 +228,6 @@ def run_engine(stdscr,
                     model.dirty_tiles.add((wx, wy))
             model.full_redraw_needed = False
 
-        # Partial/delta updates
         update_partial_tiles_in_view(
             stdscr,
             model.player,
@@ -266,8 +242,5 @@ def run_engine(stdscr,
         )
         model.dirty_tiles.clear()
 
-        # Layers
         draw_layers(stdscr, model)
-
-        # Frame limiting
         manage_framerate(20)
