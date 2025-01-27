@@ -1,0 +1,7 @@
+# requirements.txt
+# 
+# Standard libraries (os, json, time, curses, etc.) are part of Python,
+# so usually no external dependencies are strictly required on Linux/Unix.
+# On Windows, install 'windows-curses' for curses support.
+
+windows-curses

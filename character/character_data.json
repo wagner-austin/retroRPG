@@ -1,0 +1,15 @@
+{
+  "name": "Hero",
+  "hp": 100,
+  "level": 1,
+  "x": 40,
+  "y": 61,
+  "gold": 0,
+  "wood": 6,
+  "stone": 51,
+  "inventory": [],
+  "equipped": {
+    "weapon": null,
+    "armor": null
+  }
+}
