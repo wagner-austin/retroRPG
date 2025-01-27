@@ -1,4 +1,4 @@
-# map_storage.py
+# FileName: map_io_storage.py
 # version: 1.0
 # Deals with low-level JSON parsing, reading, writing, ignoring 'player' data, etc.
 
