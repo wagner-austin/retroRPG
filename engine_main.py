@@ -21,7 +21,10 @@ from color_init import color_pairs
 from scenery_main import (
     get_placeable_scenery_defs,
     apply_tile_effects,
-    get_scenery_def_id_at
+    get_scenery_def_id_at,
+    # Below imports are needed for our layering fix:
+    _layer_for_def_id,
+    FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 )
 from model_main import GameModel
 from controls_main import (
@@ -59,6 +62,48 @@ class GameContext:
             self.enable_respawn = True
 
 
+def _ensure_layered_scenery_format(placed_scenery):
+    """
+    Ensures that placed_scenery[(x,y)] is a dictionary with keys:
+      'floor', 'objects', 'items', 'entities'
+    rather than just a list of SceneryObjects.
+    
+    If it finds a dictionary (with 'floor' etc.) at (x,y), we assume it's
+    already in the new layered format. Otherwise, we convert the old
+    list-of-objects format to the layered structure.
+    """
+    if not placed_scenery:
+        return placed_scenery  # Nothing to convert
+
+    # Peek at one tile to see if it's already a dict
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    # If it's already { 'floor': ..., 'objects': [...], ... }, do nothing
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        return placed_scenery
+
+    # Otherwise, convert each tile's list-of-objects into a layered dict
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER: None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER: [],
+            ENTITIES_LAYER: []
+        }
+        for obj in obj_list:
+            layer_name = _layer_for_def_id(obj.definition_id)
+            if layer_name == FLOOR_LAYER:
+                # Overwrite any previous floor
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[layer_name].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+
 def run_engine(stdscr,
                context,
                player,
@@ -92,6 +137,9 @@ def run_engine(stdscr,
             if hasattr(obj, 'x') and hasattr(obj, 'y'):
                 dict_scenery.setdefault((obj.x, obj.y), []).append(obj)
         model.placed_scenery = dict_scenery
+
+    # Now ensure it's in the layered (floor/objects/items/entities) format
+    model.placed_scenery = _ensure_layered_scenery_format(model.placed_scenery)
 
     # Optionally store the respawn list
     if respawn_list:

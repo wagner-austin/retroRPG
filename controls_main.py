@@ -105,11 +105,11 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
 
     # Quick-save
     elif key == ord('o'):
-        from map_io_main import save_map
+        from map_io_ui import save_map_ui
         # If we have a loaded filename, overwrite it
         if hasattr(model, "loaded_map_filename") and model.loaded_map_filename:
             # Call save_map with a forced filename
-            save_map(
+            save_map_ui(
                 stdscr,
                 model.placed_scenery,
                 player=model.player,  # so we store player coords if wanted
@@ -119,7 +119,7 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
             )
         else:
             # Prompt for new filename
-            save_map(
+            save_map_ui(
                 stdscr,
                 model.placed_scenery,
                 player=model.player,

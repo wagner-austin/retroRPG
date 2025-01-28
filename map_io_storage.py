@@ -1,5 +1,5 @@
 # FileName: map_io_storage.py
-# version: 1.0
+# version: 1.1
 # Summary: Handles the underlying JSON I/O logic for parsing and serializing map files, separate from UI code.
 # Tags: map, io, storage
 
@@ -16,7 +16,7 @@ def parse_map_dict(raw_dict):
     world_height = raw_dict.get("world_height", 60)
     scenery = raw_dict.get("scenery", [])
 
-    known_keys = {"world_width", "world_height", "scenery", "player"}
+    known_keys = {"world_width", "world_height", "scenery", "player_x", "player_y", "player"}
     extras = {}
     for k, v in raw_dict.items():
         if k not in known_keys:

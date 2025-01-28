@@ -28,7 +28,7 @@ def draw_load_map_screen(stdscr):
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
 
     instructions = [
-        "↑/↓ = select, ENTER=load, 'e' = edit, 'd'=del, 'q'=back, 'v'=toggle debug"
+        "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
     draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
 
@@ -43,7 +43,7 @@ def draw_save_map_screen(stdscr):
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
 
     instructions = [
-        "Select a map to overwrite, 'n'=new, 'q'=cancel, 'v'=toggle debug"
+        "Select a map to overwrite, 'n'=new, 'ENTER'=cancel, 'v'=toggle debug"
     ]
     draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
 
