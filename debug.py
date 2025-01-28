@@ -1,5 +1,7 @@
 # FileName: debug.py
-# Purpose: Unified debug configuration with multiple features.
+# version: 1.0
+# Summary: Holds global debugging flags and configuration toggles (speed multipliers, log verbosity, etc.).
+# Tags: debug, config, developer
 
 DEBUG_CONFIG = {
     "enabled":              False,

@@ -1,5 +1,7 @@
 # FileName: utils_main.py
 # version: 3.4
+# Summary: Contains miscellaneous utility functions (e.g., coordinate helpers, random picking) used by various modules.
+# Tags: utils, general
 
 import curses
 import shutil

@@ -1,87 +1,31 @@
 # FileName: map_io_main.py
-# version: 2.4 (Adds filename_override to skip prompt & overwrite existing file)
+# version: 3.0
+# Summary: Handles raw map data reading/writing (JSON) and structure building, no curses or UI logic.
+# Tags: map, io
 
 import os
 import json
-import curses
 
-# Our UI modules:
-from map_io_ui import (
-    prompt_for_filename,
-    display_map_list,
-    display_map_list_for_save
-)
-
-# Our JSON storage/parsing modules:
-from map_io_storage import (
-    parse_map_dict,
-    load_map_file,
-    save_map_file
-)
-
-from procedural_map_generator.generator import generate_procedural_map
+from map_io_storage import parse_map_dict, load_map_file, save_map_file
 
 
-def load_map(stdscr):
+def load_map_data(filename):
     """
-    Prompts the user to select or generate a map (curses-based UI).
-    Returns:
-      - "" if canceled
-      - "GENERATE" or ("EDIT_GENERATE", None) if user chooses to generate
-      - ("EDIT", filename) if user picks an existing map for editing
-      - a map filename (string) if user picks an existing map to play
-      - or a dict if "GENERATE" was chosen (the new map data)
+    Loads map data (JSON) from the given filename as a Python dict.
+    Returns the loaded dict or None on failure.
     """
-    selection = display_map_list(stdscr)
-    if not selection:
-        return ""
-
-    if selection == "GENERATE":
-        return generate_procedural_map()
-
-    if isinstance(selection, tuple):
-        if selection[0] == "EDIT_GENERATE":
-            data = generate_procedural_map()
-            return ("EDIT_GENERATE", data)
-        elif selection[0] == "EDIT":
-            return ("EDIT", selection[1])
-        return ""
-
-    return selection
+    try:
+        return load_map_file(filename)
+    except:
+        return None
 
 
-def save_map(stdscr, placed_scenery, player=None,
-             world_width=100, world_height=100,
-             filename_override=None):
+def build_map_data(placed_scenery, player=None, world_width=100, world_height=100):
     """
-    Saves the current map. If 'filename_override' is given, we skip the prompt
-    and overwrite that file. Otherwise, we prompt the user for which file
-    to overwrite or to create a new one.
-
-    :param player: if provided, we store player coords as well.
+    Builds a Python dict representing the map data, with optional player
+    coordinates and the given world dimensions. 'placed_scenery' can be either
+    a dict-of-lists keyed by (x,y) or a list of objects with .x, .y attributes.
     """
-    if filename_override:
-        # Overwrite existing file
-        filename = filename_override
-    else:
-        # Prompt user for new or existing file
-        overwrite_or_new = display_map_list_for_save(stdscr)
-        if not overwrite_or_new:
-            return  # user canceled
-
-        if overwrite_or_new == "NEW_FILE":
-            filename = prompt_for_filename(stdscr, "Enter filename to save as: ")
-            if not filename:
-                return
-            if not filename.endswith(".json"):
-                filename += ".json"
-        else:
-            # user picked an existing file from the list
-            filename = overwrite_or_new
-
-    maps_dir = "maps"
-    save_path = os.path.join(maps_dir, filename)
-
     map_data = {
         "world_width": world_width,
         "world_height": world_height,
@@ -102,6 +46,7 @@ def save_map(stdscr, placed_scenery, player=None,
                     "definition_id": obj.definition_id
                 })
     else:
+        # If it's just a list, iterate directly
         for obj in placed_scenery:
             map_data["scenery"].append({
                 "x": obj.x,
@@ -109,4 +54,4 @@ def save_map(stdscr, placed_scenery, player=None,
                 "definition_id": obj.definition_id
             })
 
-    save_map_file(save_path, map_data)
+    return map_data

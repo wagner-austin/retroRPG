@@ -1,2 +1,8 @@
-__pycache__/
-*.pyc
+# FileName: .gitignore
+# version 1.1
+# Summary: ignores pycache files in root and procedural_map_generator/
+# Tags: gitignore, git
+
+# Added lines to ensure __pycache__ and .pyc files in *all* subdirectories are ignored:
+**/__pycache__/
+**/*.pyc

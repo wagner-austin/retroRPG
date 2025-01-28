@@ -1,5 +1,7 @@
 # FileName: generator.py
-# version: 1.9 (Now uses constants from scenery_main instead of raw color checks)
+# version: 1.9
+# Summary: Coordinates the procedural generation workflow, calling sub-generators (rivers, grass, etc.) in order.
+# Tags: map, generation, pipeline
 
 import random
 from collections import deque  # for BFS queue

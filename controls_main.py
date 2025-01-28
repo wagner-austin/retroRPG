@@ -1,5 +1,7 @@
 # FileName: controls_main.py
-# version: 2.6 (Uppercase WASD movement + quick-save overwrites if old file, else prompt)
+# version: 2.6
+# Summary: Interprets user input for both play and editor modes, including movement, undo, toggles, etc.
+# Tags: controls, input, main
 
 import curses
 # We now import these helpers from scenery_main so we can properly

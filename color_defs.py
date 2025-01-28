@@ -1,7 +1,7 @@
 # FileName: color_defs.py
 # version: 1.0
-# Holds the list of (index, fg, bg) color pairs and a dictionary mapping names -> pair index.
-# We do NOT call curses.init_pair here; that's handled in colors_init.py.
+# Summary: Defines color constants or enums used throughout the game for consistent color referencing.
+# Tags: colors, config
 
 import curses
 

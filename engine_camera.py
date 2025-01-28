@@ -1,5 +1,7 @@
 # FileName: engine_camera.py
-# version: 2.3 (Added true partial_scroll_horizontal to mirror vertical logic)
+# version: 2.3
+# Summary: Implements camera logic (dead-zone scrolling, centering) to keep the player in view on large maps.
+# Tags: engine, camera, scrolling
 
 import curses
 

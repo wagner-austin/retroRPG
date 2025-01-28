@@ -1,6 +1,7 @@
 # FileName: engine_network.py
 # version: 1.0
-# Placeholder for future multiplayer or network logic.
+# Summary: Provides stubs or logic for multiplayer or network-driven interactions, sending/receiving game state.
+# Tags: engine, network, multiplayer
 
 def handle_network(model):
     """

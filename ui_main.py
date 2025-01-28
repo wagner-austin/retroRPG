@@ -1,6 +1,7 @@
 # FileName: ui_main.py
 # version: 2.1 (Removed duplicate draw_border, draw_art, animate_home_screen)
-# Provides general UI drawing functions and screens.
+# Summary: Provides functions and helpers for drawing frames, labels, and other UI elements on screen.
+# Tags: ui, rendering, curses
 
 import curses
 from color_init import color_pairs

@@ -1,5 +1,7 @@
 # FileName: model_main.py
-# Holds a GameModel class that stores all game-related state in one place.
+# version: 1.0
+# Summary: Defines the GameModel class storing player, scenery, camera, and other state needed for the engine.
+# Tags: model, data, state
 
 class GameModel:
     def __init__(self):

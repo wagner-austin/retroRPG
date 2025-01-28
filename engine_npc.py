@@ -1,6 +1,7 @@
 # FileName: engine_npc.py
 # version: 1.0
-# Basic placeholder for AI or NPC updates.
+# Summary: Updates non-player characters, handling their AI states, movement, and any interactions with the world.
+# Tags: engine, npc, ai
 
 def update_npcs(model, mark_dirty_func):
     """

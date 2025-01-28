@@ -1,6 +1,7 @@
 # FileName: animator_draw.py
 # version: 1.2
-# Basic drawing utilities (draw_border, draw_art) used by animator or elsewhere.
+# Summary: Houses the drawing routines for sprite or scene animations, used by the animator logic.
+# Tags: animation, drawing
 
 import curses
 

@@ -1,6 +1,7 @@
 # FileName: engine_transition.py
 # version: 1.0
-# Placeholder for future fade-in/out or scene transitions.
+# Summary: Handles scene/area transitions triggered by stepping on special tiles or meeting conditions.
+# Tags: engine, transitions
 
 def handle_transitions(model, mark_dirty_func):
     """

@@ -1,7 +1,7 @@
 # FileName: engine_framerate.py
 # version: 1.0
-# Simple placeholder for framerate or timing control. 
-# Right now, we just store a "manage_framerate" function you could expand.
+# Summary: Manages timing and frame delays to maintain a target FPS, preventing overly fast or slow loops.
+# Tags: engine, performance, timing
 
 import time
 

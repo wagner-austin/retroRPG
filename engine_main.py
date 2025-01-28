@@ -1,5 +1,7 @@
 # FileName: engine_main.py
-# version: 2.11 (Adds loaded_map_filename param to run_engine)
+# version: 2.11
+# Summary: Core game loop integrating updates (NPCs, respawns, network) and rendering each frame.
+# Tags: engine, main, loop
 
 import curses
 

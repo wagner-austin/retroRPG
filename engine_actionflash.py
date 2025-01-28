@@ -1,6 +1,7 @@
 # FileName: engine_actionflash.py
 # version: 1.0
-# Handles the "action flash countdown" (e.g. for chopping/mining feedback).
+# Summary: Displays and updates short-lived visual indicators (flashes) when player chops, mines, or interacts.
+# Tags: engine, feedback, effects
 
 def update_action_flash(model, mark_dirty_func):
     """

@@ -1,5 +1,7 @@
 # FileName: scenery_main.py
-# version: 2.1 (All scenery-based logic consolidated + definitions stored as constants)
+# version: 2.1
+# Summary: Manages all scenery objects (trees, rocks, bridges), including placement, removal, and collision checks.
+# Tags: scenery, map, collision
 
 #############################
 # SCENERY DEFINITIONS REGISTRY

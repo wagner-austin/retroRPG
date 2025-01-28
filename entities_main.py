@@ -1,8 +1,7 @@
 # FileName: entities_main.py
-# version: 1.2
-# Placeholder for monster or item classes with stats, AI, or pick-up behavior.
-# For example, add new enemy types or item effects, or expand monster AI logic.
-# Edit here to implement combat, loot, or advanced creature behaviors.
+# version: 1.0
+# Summary: Defines entity logic or classes for monsters, NPCs, or interactive objects in the game world.
+# Tags: entities, ai, monster, npc
 
 class Monster:
     def __init__(self, x, y, name="Goblin"):

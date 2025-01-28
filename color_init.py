@@ -1,7 +1,7 @@
 # FileName: color_init.py
-# version: 2.0 (Modularized with color_definitions)
-# Manages curses color pairs for the entire game by importing definitions
-# from color_definitions.py, then initializing them.
+# version: 2.0
+# Summary: Initializes curses color pairs and sets up global color mappings for all rendered text.
+# Tags: colors, curses, setup
 
 import curses
 from color_defs import ALL_COLOR_DEFINITIONS, COLOR_PAIR_NAMES

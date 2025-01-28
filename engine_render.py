@@ -1,6 +1,7 @@
 # FileName: engine_render.py
-# version: 1.1
-# Unified "dirty tile" tracking and partial/delta rendering logic here.
+# version: 1.0
+# Summary: Renders terrain, objects, and the player using partial/delta redraw for performance.
+# Tags: engine, rendering, optimization
 
 import curses
 from scenery_main import (

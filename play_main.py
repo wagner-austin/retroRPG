@@ -1,9 +1,12 @@
 # FileName: play_main.py
-# version: 2.2 (Fixes tuple handling; starts in play mode)
+# version: 2.2
+# Summary: Top-level function for entering Play mode, linking user’s map choice to the engine loop.
+# Tags: play, main, engine
 
 import curses
-from map_io_main import load_map
+from map_io_ui import load_map_ui  # CHANGED: we now import from map_io_ui
 from play_runner import parse_and_run_play
+
 
 def play_main(stdscr):
     """
@@ -12,14 +15,13 @@ def play_main(stdscr):
     you can press 'e' to toggle to the editor if desired.
     """
     while True:
-        selection = load_map(stdscr)
+        selection = load_map_ui(stdscr)  # formerly load_map(stdscr) from map_io_main
         if not selection:
             # user canceled => back to main menu
             return
 
-        # If load_map returns a tuple (e.g. ("EDIT", filename)),
-        # we pass the second item (the actual map file or data)
-        # into parse_and_run_play, so it doesn't crash.
+        # If load_map_ui returns a tuple (e.g. ("EDIT", filename)),
+        # we pass the second item into parse_and_run_play.
         if isinstance(selection, tuple):
             action_type, actual_map = selection[0], selection[1]
             if action_type == "EDIT_GENERATE":

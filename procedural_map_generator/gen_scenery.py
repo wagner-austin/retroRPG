@@ -1,6 +1,7 @@
-# gen_scenery.py
+# FileName: gen_scenery.py
 # version: 1.0
-# Consolidates all logic for placing procedural scenery: rivers, grass, rocks, trees, bridges, etc.
+# Summary: Consolidates all logic for placing procedural scenery: rivers, grass, rocks, trees, bridges, etc.
+# Tags: map, generation, scenery
 
 import random
 import math  # For our semi-circle angle calculations

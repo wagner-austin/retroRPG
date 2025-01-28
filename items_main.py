@@ -1,11 +1,8 @@
-# File: items_main.py
+# FileName: items_main.py
 # version: 1.0
-"""
-Holds global item definitions and the ItemInstance class.
+# Summary: Manages item definitions, handling creation, inventory, usage effects, or item-based interactions.
+# Tags: items, gameplay, inventory
 
-Usage:
-    from items import ALL_ITEMS, ItemInstance
-"""
 
 ##############################################################################
 # 1) Item Registry

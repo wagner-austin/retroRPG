@@ -1,5 +1,7 @@
 # FileName: engine_respawn.py
-# version: 1.1 (Now uses _append_scenery for dict-based placed_scenery)
+# version: 1.1
+# Summary: Tracks and respawns resources (trees, rocks) or other entities after a set timer.
+# Tags: engine, respawn, resources
 
 from scenery_main import SceneryObject
 # We import the dictionary-friendly helper:

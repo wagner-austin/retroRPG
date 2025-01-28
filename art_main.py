@@ -1,8 +1,7 @@
-#animator/art_main.py
-#version: 1.2
-#Stores ASCII art for menus, monsters, or decorative elements.
-#For example, replace MAIN_MENU_ART or add new banners for sub-screens.
-#Useful for creating a distinctive retro feel.
+# FileName: art_main.py
+# version: 1.2
+# Summary: Stores ASCII art or special graphics needed for titles, load screens, or decorative UI elements.
+# Tags: art, ui
 
 HEADER_ART = [
     "=== HEADER ART PLACEHOLDER ===",

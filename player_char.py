@@ -1,6 +1,7 @@
 # FileName: player_char.py
-# Version 1.2
-# Purpose: Holds the Player class, including collisions and debug-based logic.
+# version: 1.2
+# Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
+# Tags: player, character, movement
 
 import debug
 from scenery_main import is_blocked

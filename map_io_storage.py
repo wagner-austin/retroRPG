@@ -1,6 +1,7 @@
 # FileName: map_io_storage.py
 # version: 1.0
-# Deals with low-level JSON parsing, reading, writing, ignoring 'player' data, etc.
+# Summary: Handles the underlying JSON I/O logic for parsing and serializing map files, separate from UI code.
+# Tags: map, io, storage
 
 import os
 import json

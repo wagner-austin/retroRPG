@@ -1,14 +1,12 @@
 # FileName: animator_main.py
-# version: 2.0 (UPDATED)
-# Focuses on subtle ASCII animation loops (animate_art_subtle, animate_home_screen, etc.)
+# version: 2.1
+# Summary: Manages low-level animation updates (e.g. subtle ASCII art shifts). 
+#          High-level "scene" logic has been moved to scene_main.py.
+# Tags: animation, transitions
 
 import curses
-from color_init import color_pairs
-from art_main import MAIN_MENU_ART, CROCODILE
-# CHANGED: import draw_screen_frame instead of draw_border
-from ui_main import draw_title, draw_instructions, draw_screen_frame
-
 from animator_draw import draw_art
+
 
 def animate_art_subtle(
     stdscr,
@@ -19,11 +17,11 @@ def animate_art_subtle(
     shift_delay_frames=20
 ):
     """
-    Slowly shift ASCII art left/right by ±max_shift columns,
+    Slowly shifts ASCII art left/right by ±max_shift columns,
     pausing shift_delay_frames between shifts.
     Press 'q'/'Q' or ESC to exit.
+    Optional: 'title_text' can be displayed at row=1, col=2 (if desired).
     """
-
     stdscr.nodelay(True)
     curses.curs_set(0)
 
@@ -32,15 +30,13 @@ def animate_art_subtle(
     frame_count = 0
 
     while True:
+        # You can optionally clear or let the caller draw a frame, etc.
         stdscr.erase()
-        draw_screen_frame(stdscr)  # CHANGED
 
+        # If given, display some title text
         if title_text:
-            color = curses.color_pair(color_pairs["WHITE_TEXT"]) | curses.A_BOLD
             try:
-                stdscr.attron(color)
-                stdscr.addstr(1, 2, title_text)
-                stdscr.attroff(color)
+                stdscr.addstr(1, 2, title_text, curses.A_BOLD)
             except curses.error:
                 pass
 
@@ -54,118 +50,6 @@ def animate_art_subtle(
         key = stdscr.getch()
         if key in (ord('q'), ord('Q'), 27):
             break
-        elif key == ord('v'):
-            import debug
-            debug.toggle_debug()
-
-        frame_count += 1
-        if frame_count % shift_delay_frames == 0:
-            offset_x += direction
-            if offset_x >= max_shift:
-                offset_x = max_shift
-                direction = -1
-            elif offset_x <= -max_shift:
-                offset_x = -max_shift
-                direction = 1
-
-        curses.napms(frame_delay_ms)
-
-def animate_home_screen(stdscr):
-    """
-    Animates MAIN_MENU_ART left/right ±2 columns, draws menu instructions, 
-    and returns 1 (play) or 2 (quit).
-    """
-    stdscr.nodelay(True)
-    stdscr.keypad(True)
-    curses.curs_set(0)
-
-    max_shift = 2
-    frame_delay_ms = 50
-    shift_delay_frames = 20
-
-    offset_x = 0
-    direction = -1
-    frame_count = 0
-
-    while True:
-        stdscr.erase()
-        draw_screen_frame(stdscr)  # CHANGED
-
-        draw_title(stdscr, "Welcome to Retro RPG!", row=1)
-
-        menu_lines = [
-            "~~~~~~~~~",
-            "1) Play",
-            "2) Quit",
-            "~~~~~~~~~"
-        ]
-        draw_instructions(stdscr, menu_lines, from_bottom=2, color_name="UI_YELLOW")
-
-        # Animate ASCII art
-        draw_art(stdscr, MAIN_MENU_ART, start_row=3, start_col=2 + offset_x)
-
-        stdscr.noutrefresh()
-        curses.doupdate()
-
-        key = stdscr.getch()
-        if key != -1:
-            if key in (ord('1'), ord('p'), ord('P')):
-                return 1
-            elif key in (ord('2'), ord('q'), ord('Q'), 27):
-                return 2
-            elif key == ord('v'):
-                import debug
-                debug.toggle_debug()
-
-        frame_count += 1
-        if frame_count % shift_delay_frames == 0:
-            offset_x += direction
-            if offset_x >= max_shift:
-                offset_x = max_shift
-                direction = -1
-            elif offset_x <= -max_shift:
-                offset_x = -max_shift
-                direction = 1
-
-        curses.napms(frame_delay_ms)
-
-def animate_load_screen(stdscr):
-    """
-    Shows animated CROCODILE art for the Load Map screen. 
-    This function no longer does any map selection itself—
-    it just animates until the user presses Enter/ESC/'q',
-    then returns None. The actual load logic happens in map_io_ui.py.
-    """
-    stdscr.nodelay(True)
-    stdscr.keypad(True)
-    curses.curs_set(0)
-
-    max_shift = 2
-    frame_delay_ms = 50
-    shift_delay_frames = 20
-
-    offset_x = 0
-    direction = -1
-    frame_count = 0
-
-    while True:
-        stdscr.erase()
-        draw_screen_frame(stdscr)  # CHANGED
-
-        draw_title(stdscr, "Load Map", row=1)
-        draw_art(stdscr, CROCODILE, start_row=3, start_col=2 + offset_x)
-
-        instructions = [
-            "↑/↓=select, ENTER=load, 'd'=del, 'q'=back"
-        ]
-        draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
-
-        stdscr.noutrefresh()
-        curses.doupdate()
-
-        key = stdscr.getch()
-        if key in (ord('q'), ord('Q'), 27, curses.KEY_ENTER, 10, 13):
-            return None
         elif key == ord('v'):
             import debug
             debug.toggle_debug()

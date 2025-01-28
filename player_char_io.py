@@ -1,5 +1,8 @@
 # FileName: player_char_io.py
-# version: 2.1 (UNIFIED SINGLE-SAVE FILE, stored in "character/character_data.json")
+# version: 2.1
+# Summary: Persists or loads player data (stats, position) to/from JSON files, ensuring continuity of progress.
+# Tags: player, io
+
 """
 Handles saving/loading the Player object to JSON (single file),
 stored in a "character" subfolder.
