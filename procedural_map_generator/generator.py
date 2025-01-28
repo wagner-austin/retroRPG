@@ -6,16 +6,17 @@
 import random
 from collections import deque  # for BFS queue
 
-# Import all generation functions
-from .gen_scenery import (
-    spawn_rivers,
+# Import sub-generators from their respective modules
+from .gen_rivers import spawn_rivers
+from .gen_grass import (
     spawn_large_semicircle_grass,
-    # spawn_rocks,
-    # spawn_trees_non_grass,
-    # connect_grass_regions_with_bridges,
     find_grass_regions,
     find_random_grass_spot
 )
+# Potentially also import from gen_rocks, gen_trees, gen_bridges if needed:
+# from .gen_rocks import spawn_rocks
+# from .gen_trees import spawn_trees_non_grass
+# from .gen_bridges import connect_grass_regions_with_bridges
 
 # Import the ID constants and the forward/reverse maps from scenery_defs
 from scenery_defs import (
@@ -52,8 +53,8 @@ def definition_id_to_tile(def_id):
 
 def generate_procedural_map(width=100, height=100):
     """
-    Orchestrates procedural map generation by calling gen_scenery modules:
-      1) spawn_rivers  -> sets tiles to (' ', 4) => "RIVER_ID"
+    Orchestrates procedural map generation by calling sub-generation modules:
+      1) spawn_rivers -> sets tiles to (' ', 4) => "RIVER_ID"
       2) spawn_large_semicircle_grass -> sets tiles to (' ', 5) => "GRASS_ID"
       3) BFS from grass to fill blank with either SEMICOLON_FLOOR or EMPTY_FLOOR
       4) Overwrite empty floor tiles with DEBUG_DOT if debug is enabled.
@@ -82,7 +83,6 @@ def generate_procedural_map(width=100, height=100):
 
     # BFS data
     distance_map = [[99999]*width for _ in range(height)]
-    from collections import deque
     queue = deque()
 
     # Identify grass => BFS starting points

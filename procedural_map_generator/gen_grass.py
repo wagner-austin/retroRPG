@@ -2,6 +2,7 @@
 # Handles creation of grass patches, BFS for grass regions, and finding random grass spots.
 
 import random
+import math  # ADDED: for spawn_large_semicircle_grass (sqrt, sin, cos, etc.)
 
 def spawn_grass_patches(grid, width, height, patch_count_min=3, patch_count_max=10):
     """
@@ -61,6 +62,71 @@ def create_grass_patch(grid, width, height, patch_size_min=10, patch_size_max=20
                     visited.add((nx, ny))
                     queue.append((nx, ny))
 
+def spawn_large_semicircle_grass(grid, width, height,
+                                 bundles=5, patch_size=40):
+    """
+    Creates 'bundles' of large grass areas near the river.
+    Each bundle picks a random river tile and forms a rough semi-circle
+    of 'patch_size' tiles outward from that point.
+
+    - We pick a center angle, then scatter grass within +/-90 degrees from it,
+      up to some random radius, to emulate a semi-circular region.
+    - 'bundles' => how many lumps
+    - 'patch_size' => how many tiles in each lump
+    - The tile for grass is (' ', 5).
+
+    Updated for larger coverage:
+      - radius is bigger => +8 instead of +4
+    """
+    # Gather all river (water) positions
+    water_positions = []
+    for y in range(height):
+        for x in range(width):
+            if grid[y][x] is not None:
+                ch, cpair = grid[y][x]
+                # water => (' ', 4)
+                if ch == ' ' and cpair == 4:
+                    water_positions.append((x, y))
+
+    if not water_positions:
+        return  # No rivers => skip
+
+    for _ in range(bundles):
+        # Pick a random water tile as "center"
+        center_x, center_y = random.choice(water_positions)
+
+        # Random "orientation" for the semicircle
+        center_angle = random.uniform(0, 360)
+
+        # We'll define a rough radius for the lumps.
+        radius = int(math.sqrt(patch_size)) + 8
+
+        placed = 0
+        attempts = 0
+        max_attempts = patch_size * 10
+
+        while placed < patch_size and attempts < max_attempts:
+            attempts += 1
+
+            # Random angle within +/- 90 deg from center_angle
+            angle_offset = random.uniform(-90, 90)
+            angle = math.radians(center_angle + angle_offset)
+
+            # Random distance from [0..radius]
+            r = random.uniform(0, radius)
+
+            # Compute potential coords
+            dx = int(round(r * math.cos(angle)))
+            dy = int(round(r * math.sin(angle)))
+            x = center_x + dx
+            y = center_y + dy
+
+            if 0 <= x < width and 0 <= y < height:
+                # Place grass if None
+                if grid[y][x] is None:
+                    grid[y][x] = (' ', 5)  # grass
+                    placed += 1
+
 def find_grass_regions(grid, width, height):
     """
     Uses BFS to identify distinct 'regions' of grass (char=' ', color=5).
@@ -100,7 +166,7 @@ def find_grass_regions(grid, width, height):
 def find_random_grass_spot(grid, width, height):
     """
     Return (x, y) of a random tile that is grass (char=' ', color=5).
-    If none found, returns (0,0).
+    If none found, returns (0, 0).
     """
     grass_positions = []
     for y in range(height):
