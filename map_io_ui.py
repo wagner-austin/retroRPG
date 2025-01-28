@@ -1,8 +1,7 @@
 # FileName: map_io_ui.py
-# version: 2.6
+# version: 2.7
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts).
-#          Updated to disable the extra "ask_save_generated_map_ui" prompt
-#          so we don't get two "save this generated map" dialogs.
+#          Now does no text on overwrite, just a 500ms nap if `notify_overwrite=True`.
 # Tags: map, ui, io
 
 import curses
@@ -16,7 +15,6 @@ from ui_main import (
     draw_instructions
 )
 from art_main import CROCODILE
-# Use the global highlight function for consistent effect/speed across all menus
 from highlight_selector import draw_global_selector_line
 
 
@@ -67,30 +65,7 @@ def prompt_for_filename(stdscr, prompt):
     return ""
 
 
-def draw_load_map_screen(stdscr):
-    stdscr.clear()
-    stdscr.nodelay(False)
-    stdscr.keypad(True)
-    curses.curs_set(0)
-    draw_screen_frame(stdscr)
-    draw_title(stdscr, "Load Map", row=1)
-    draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
-
-    instructions = [
-        "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
-    ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
-
-
 def display_map_list(stdscr):
-    """
-    Shows a list of maps plus a top "Generate a new map"
-      - Index 0 => "Generate a new map>"
-      - ...
-      - 'q' => cancel => returns ""
-      - 'e' => Editor mode
-      - 'v' => toggle debug
-    """
     init_colors()
     maps_dir = "maps"
     if not os.path.isdir(maps_dir):
@@ -101,7 +76,7 @@ def display_map_list(stdscr):
     files.insert(0, "0) Generate a new map>")
 
     selected_index = 0
-    frame_count = 0  # for highlight animation updates
+    frame_count = 0
 
     while True:
         draw_load_map_screen(stdscr)
@@ -117,7 +92,6 @@ def display_map_list(stdscr):
                 display_text = f"{i}) {fname}"
 
             is_sel = (i == selected_index)
-            # The single global function => effect/speed from highlight_selector.py
             draw_global_selector_line(
                 stdscr,
                 row,
@@ -160,13 +134,6 @@ def display_map_list(stdscr):
 
 
 def display_map_list_for_save(stdscr):
-    """
-    Shows a list of existing maps to overwrite OR create new with 'n'.
-    Returns:
-      - "NEW_FILE"
-      - "" if canceled
-      - or a filename to overwrite
-    """
     init_colors()
     maps_dir = "maps"
     if not os.path.isdir(maps_dir):
@@ -244,7 +211,6 @@ def display_map_list_for_save(stdscr):
                     return files[idx]
         except:
             pass
-        # loop again if invalid input
 
 
 def load_map_ui(stdscr):
@@ -267,7 +233,12 @@ def load_map_ui(stdscr):
 
 def save_map_ui(stdscr, placed_scenery, player=None,
                 world_width=100, world_height=100,
-                filename_override=None):
+                filename_override=None,
+                notify_overwrite=False):
+    """
+    notify_overwrite=True => if a file is being overwritten, do a 500ms nap (no text).
+    notify_overwrite=False => skip any nap or notification.
+    """
     import map_io_main
     from map_io_storage import save_map_file
 
@@ -291,7 +262,7 @@ def save_map_ui(stdscr, placed_scenery, player=None,
         os.makedirs(maps_dir, exist_ok=True)
 
     save_path = os.path.join(maps_dir, filename)
-    file_existed = os.path.exists(save_path)  # Check if we're overwriting
+    file_existed = os.path.exists(save_path)
 
     map_data = map_io_main.build_map_data(
         placed_scenery,
@@ -303,27 +274,14 @@ def save_map_ui(stdscr, placed_scenery, player=None,
     # Actually save the file
     save_map_file(save_path, map_data)
 
-    # If file previously existed, show an overwrite notification
-    if file_existed:
-        try:
-            h, w = stdscr.getmaxyx()
-            msg = f"Quick-save overwrote existing file: {filename}"
-            row = 2
-            col = 2
-            stdscr.addstr(row, col, msg, curses.color_pair(color_pairs["UI_YELLOW"]))
-            stdscr.refresh()
-            curses.napms(1500)  # Pause 1.5s so user can see the message
-        except:
-            pass
-    else:
-        # Optional: show a "Saved new file" message if you want
-        pass
-
+    # if overwriting
+    if file_existed and notify_overwrite:
+        # just do a 500ms nap, no text
+        curses.napms(500)
+    # else no message or nap
 
 def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=None):
     """
-    Disabled to avoid duplicate "save this generated map? (y/n)" pop-up.
-    The inline prompt in handle_common_keys now handles this.
+    Disabled to avoid a second "save generated map?" prompt.
     """
-    # We simply do nothing here, so there's no second yes/no prompt
     return
