@@ -1,5 +1,5 @@
 # FileName: map_io_ui.py
-# version: 2.1 (Made draw_load_map_screen/draw_save_map_screen NOT do final refresh, to fix highlight disappearance)
+# version: 2.2 (Use highlight_selector.py for the load/save lists)
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts).
 # Tags: map, ui, io
 
@@ -11,18 +11,18 @@ from ui_main import (
     draw_screen_frame,
     draw_title,
     draw_art,
-    draw_instructions,
-    draw_selectable_line,  # We'll use if needed
-    get_selector_effect_attrs
+    draw_instructions
 )
 from art_main import CROCODILE
+
+# NEW: We now import from highlight_selector instead of local functions
+from highlight_selector import draw_selectable_line
 
 
 def draw_load_map_screen(stdscr):
     """
     Clears screen, draws frame/title/art/instructions for Load Map.
-    Does NOT do final stdscr.refresh() in order to allow subsequent
-    lines (highlighted map list) to remain stable.
+    Does NOT do final stdscr.refresh() here, so callers can manage highlights.
     """
     stdscr.clear()
     stdscr.nodelay(False)
@@ -36,13 +36,12 @@ def draw_load_map_screen(stdscr):
         "↑/↓ = select, ENTER=load, 'e' = edit, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
     draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
-    # Removed the final stdscr.refresh() to prevent overwriting highlights.
 
 
 def draw_save_map_screen(stdscr):
     """
     Clears screen, draws frame/title/art/instructions for Save Map.
-    Does NOT do final stdscr.refresh(), same reasoning as load screen.
+    Does NOT do final stdscr.refresh() here, so callers can manage highlights.
     """
     stdscr.clear()
     stdscr.nodelay(False)
@@ -56,7 +55,6 @@ def draw_save_map_screen(stdscr):
         "Select a map to overwrite, 'n'=new, 'q'=cancel, 'v'=toggle debug"
     ]
     draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
-    # Removed stdscr.refresh() here as well.
 
 
 def prompt_for_filename(stdscr, prompt):
@@ -70,7 +68,6 @@ def prompt_for_filename(stdscr, prompt):
     max_h, max_w = stdscr.getmaxyx()
     row = 10
     if row < max_h - 1:
-        # We refresh once here to ensure prompt is visible before getstr
         stdscr.refresh()
         stdscr.addstr(row, 2, prompt, curses.color_pair(color_pairs["UI_CYAN"]))
         stdscr.refresh()
@@ -85,11 +82,11 @@ def prompt_for_filename(stdscr, prompt):
 def display_map_list(stdscr):
     """
     Shows a list of maps plus a top "Generate a new map"
-    - Index 0 => "Generate a new map"
-    - ...
-    - 'q' => cancel => returns ""
-    - 'e' => Editor mode
-    - 'v' => toggle debug
+      - Index 0 => "Generate a new map"
+      - ...
+      - 'q' => cancel => returns ""
+      - 'e' => Editor mode
+      - 'v' => toggle debug
     """
     init_colors()
     maps_dir = "maps"
@@ -101,9 +98,9 @@ def display_map_list(stdscr):
     files.insert(0, "0) Generate a new map>")
 
     selected_index = 0
+    frame_count = 0  # For optional highlight animations
 
     while True:
-        # Redraw the base load screen (without final refresh):
         draw_load_map_screen(stdscr)
 
         max_h, max_w = stdscr.getmaxyx()
@@ -121,19 +118,17 @@ def display_map_list(stdscr):
                 display_text = f"{i}) {fname}"
 
             is_sel = (i == selected_index)
-            try:
-                # Use a blinking reverse effect for demonstration:
-                #   (you can easily change to "REVERSE" or "NONE" if desired)
-                draw_selectable_line(
-                    stdscr,
-                    row,
-                    f"> {display_text}" if is_sel else f"  {display_text}",
-                    is_selected=is_sel,
-                    color_name="UI_YELLOW",
-                    effect="REVERSE_BLINK"
-                )
-            except:
-                pass
+
+            # Example usage: effect="REVERSE_BLINK", or try "FLASH", "GLOW", etc.
+            draw_selectable_line(
+                stdscr,
+                row,
+                f"> {display_text}" if is_sel else f"  {display_text}",
+                is_selected=is_sel,
+                color_name="UI_YELLOW",
+                effect="REVERSE_BLINK",  # or "FLASH"/"GLOW"/"SHIMMER"
+                frame=frame_count
+            )
 
             row += 1
 
@@ -166,8 +161,9 @@ def display_map_list(stdscr):
                 selected_index = typed
 
         if len(files) == 1:
-            # Only "Generate a new map>" is present
             selected_index = 0
+
+        frame_count += 1  # increment for animation
 
 
 def display_map_list_for_save(stdscr):
@@ -192,8 +188,8 @@ def display_map_list_for_save(stdscr):
         row = 10
 
         if files:
+            stdscr.refresh()
             try:
-                stdscr.refresh()
                 stdscr.addstr(
                     row, 2,
                     "Maps (pick number to overwrite) or 'n' for new, 'v' toggles debug:",
@@ -220,8 +216,8 @@ def display_map_list_for_save(stdscr):
                     pass
                 row += 1
         else:
+            stdscr.refresh()
             try:
-                stdscr.refresh()
                 stdscr.addstr(
                     row, 2,
                     "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",

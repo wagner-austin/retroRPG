@@ -1,6 +1,6 @@
 # FileName: ui_main.py
-# version: 2.2 (Added modular selector logic; removed extra refresh in draw_*_map_screen)
-# Summary: Provides functions and helpers for drawing frames, labels, selectors, etc.
+# version: 2.3 (Removed local selector logic; we now use highlight_selector.py)
+# Summary: Provides functions and helpers for drawing frames, labels, etc.
 # Tags: ui, rendering, curses
 
 import curses
@@ -67,49 +67,8 @@ def draw_screen_frame(stdscr, color_name=BORDER_COLOR_NAME):
         if debug.DEBUG_CONFIG["enabled"]:
             max_h, max_w = stdscr.getmaxyx()
             label = "Debug mode: On"
-            # Place it near the top-right
             col = max_w - len(label) - 2
             debug_color = curses.color_pair(color_pairs["WHITE_TEXT"])
             stdscr.addstr(0, col, label, debug_color)
     except:
-        pass
-
-
-# ---------------------------
-#  Modular Selector Support
-# ---------------------------
-def get_selector_effect_attrs(effect="REVERSE_BLINK"):
-    """
-    Returns a curses attribute (or combination) for the desired selector effect.
-    Possible 'effect' values: 'NONE', 'REVERSE', 'BLINK', 'REVERSE_BLINK', etc.
-    Note: Actual blinking may depend on terminal support.
-    """
-    if effect == "NONE":
-        return curses.A_NORMAL
-    elif effect == "REVERSE":
-        return curses.A_REVERSE
-    elif effect == "BLINK":
-        return curses.A_BLINK
-    elif effect == "REVERSE_BLINK":
-        return curses.A_REVERSE | curses.A_BLINK
-    else:
-        # default
-        return curses.A_REVERSE
-
-
-def draw_selectable_line(stdscr, row, text, is_selected=False,
-                         color_name=HIGHLIGHT_COLOR_NAME,
-                         effect="REVERSE_BLINK"):
-    """
-    Draws a single line with optional highlight/selector effect.
-    """
-    _, w = stdscr.getmaxyx()
-    truncated = text[:w - 4]
-    try:
-        if is_selected:
-            color = curses.color_pair(color_pairs[color_name]) | get_selector_effect_attrs(effect)
-        else:
-            color = curses.color_pair(color_pairs[color_name])
-        stdscr.addstr(row, 2, truncated, color)
-    except curses.error:
         pass

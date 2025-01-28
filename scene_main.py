@@ -1,6 +1,6 @@
 # FileName: scene_main.py
-# version: 1.2 (Arrow-key selector added to home screen, preserving number selection)
-# Summary: High-level scene functions that combine animation, UI, and input loops (title screen, load screen).
+# version: 1.2 (Uses highlight_selector for arrow-key selection on home screen)
+# Summary: High-level scene functions (title screen, load screen, etc.)
 # Tags: scene, animation, menu
 
 import curses
@@ -10,12 +10,12 @@ from art_main import MAIN_MENU_ART, CROCODILE
 from ui_main import (
     draw_screen_frame,
     draw_title,
-    draw_instructions,
-    draw_selectable_line,        # to highlight the menu lines
-    get_selector_effect_attrs
+    draw_instructions
 )
 from animator_draw import draw_art
 
+# NEW: Instead of pulling from ui_main, we use highlight_selector
+from highlight_selector import draw_selectable_line
 
 def scene_home_screen(stdscr):
     """
@@ -43,18 +43,17 @@ def scene_home_screen(stdscr):
     direction = -1
     frame_count = 0
 
-    # The lines we show near bottom; do not change text:
-    # (We will highlight lines [1, 2] in this array: "1) Play" => index 1, "2) Quit" => index 2)
+    # The lines shown near bottom (unchanged text):
     menu_lines = [
         "~~~~~~~~~",
         "1) Play",
-        # "3) Settings",   <-- commented out in text, but we still accept '3' input
+        # "3) Settings", <-- omitted in text but user can press '3'
         "2) Quit",
         "~~~~~~~~~"
     ]
-    # Indices that are actually selectable: we won't highlight the "~~~~~~~~~"
-    selectable_indices = [1, 2]  # only these lines are "selectable"
-    current_select_slot = 0  # 0 => line #1 ("1) Play"), 1 => line #2 ("2) Quit")
+    # Only indices 1 and 2 are selectable lines
+    selectable_indices = [1, 2]
+    current_select_slot = 0  # 0 => "1) Play"; 1 => "2) Quit"
 
     while True:
         stdscr.erase()
@@ -65,9 +64,7 @@ def scene_home_screen(stdscr):
         # Animate ASCII art
         draw_art(stdscr, MAIN_MENU_ART, start_row=3, start_col=2 + offset_x)
 
-        # Draw the same lines we always do near bottom, 
-        # but highlight whichever is currently selected.
-        # We do not add or remove text; we only invert or blink the selected line.
+        # Draw the lines near the bottom, highlight whichever is selected
         h, w = stdscr.getmaxyx()
         from_bottom = 2
         start_row = h - from_bottom - len(menu_lines)
@@ -77,10 +74,7 @@ def scene_home_screen(stdscr):
         row = start_row
         for i, line_text in enumerate(menu_lines):
             is_selected = False
-            # Check if this line is one of the selectable lines 
-            # and if it matches the current selected "slot"
             if i in selectable_indices:
-                # find the "index" within selectable_indices
                 sel_index = selectable_indices.index(i)
                 if sel_index == current_select_slot:
                     is_selected = True
@@ -91,8 +85,8 @@ def scene_home_screen(stdscr):
                 line_text,
                 is_selected=is_selected,
                 color_name="UI_YELLOW",
-                # You can switch effect to "REVERSE", "NONE", "REVERSE_BLINK", etc.
-                effect="REVERSE_BLINK"
+                effect="SHIMMER",  # or "FLASH", "GLOW", "SHIMMER" etc.
+                frame=frame_count
             )
             row += 1
 
@@ -102,25 +96,19 @@ def scene_home_screen(stdscr):
         # Handle input
         key = stdscr.getch()
         if key != -1:
-            # If arrow up => move selection up
             if key in (curses.KEY_UP, ord('w'), ord('W')):
-                current_select_slot -= 1
-                if current_select_slot < 0:
-                    current_select_slot = 0
-            # If arrow down => move selection down
+                current_select_slot = max(0, current_select_slot - 1)
             elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
                 if current_select_slot < len(selectable_indices) - 1:
                     current_select_slot += 1
-
-            # If user presses Enter => confirm the selected item
             elif key in (curses.KEY_ENTER, 10, 13):
-                # If current_select_slot == 0 => line #1 => "1) Play"
+                # If current_select_slot == 0 => "1) Play"
                 if current_select_slot == 0:
                     return 1
                 else:
                     return 2
 
-            # If user presses numeric keys, follow existing logic (no text changed):
+            # Numeric shortcuts remain the same:
             elif key == ord('1'):
                 return 1
             elif key == ord('2'):
@@ -128,13 +116,12 @@ def scene_home_screen(stdscr):
             elif key == ord('3') or key in (ord('s'), ord('S')):
                 return 3
             elif key in (ord('q'), ord('Q'), 27):
-                # treat 'q' or ESC as "2) Quit":
                 return 2
             elif key == ord('v'):
                 import debug
                 debug.toggle_debug()
 
-        # Animate the left/right shift for ASCII art
+        # Animate the left/right shift
         frame_count += 1
         if frame_count % shift_delay_frames == 0:
             offset_x += direction
@@ -229,7 +216,6 @@ def scene_settings_screen(stdscr):
 
         key = stdscr.getch()
         if key in (ord('q'), ord('Q'), 27):
-            # Return to main menu
             return
         elif key == ord('v'):
             import debug
