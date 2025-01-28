@@ -123,9 +123,9 @@ def display_map_list(stdscr):
         stdscr.refresh()
         key = stdscr.getch()
 
-        if key == curses.KEY_UP:
+        if key in (curses.KEY_UP, ord('w'), ord('W')):
             selected_index = max(0, selected_index - 1)
-        elif key == curses.KEY_DOWN:
+        elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
             selected_index = min(len(files) - 1, selected_index + 1)
         elif key in (curses.KEY_ENTER, 10, 13):
             if selected_index == 0:
