@@ -3,10 +3,10 @@
   "hp": 100,
   "level": 1,
   "x": 50,
-  "y": 53,
+  "y": 50,
   "gold": 0,
   "wood": 6,
-  "stone": 51,
+  "stone": 52,
   "inventory": [],
   "equipped": {
     "weapon": null,

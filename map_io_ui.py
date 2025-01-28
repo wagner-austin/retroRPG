@@ -1,5 +1,5 @@
 # FileName: map_io_ui.py
-# version: 2.2 (Use highlight_selector.py for the load/save lists)
+# version: 2.4 (Now using a single global highlight config from highlight_selector.py)
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts).
 # Tags: map, ui, io
 
@@ -14,24 +14,19 @@ from ui_main import (
     draw_instructions
 )
 from art_main import CROCODILE
-
-# NEW: We now import from highlight_selector instead of local functions
-from highlight_selector import draw_selectable_line
+# Use the global highlight function for consistent effect/speed across all menus
+from highlight_selector import draw_global_selector_line
 
 
 def draw_load_map_screen(stdscr):
-    """
-    Clears screen, draws frame/title/art/instructions for Load Map.
-    Does NOT do final stdscr.refresh() here, so callers can manage highlights.
-    """
     stdscr.clear()
     stdscr.nodelay(False)
     stdscr.keypad(True)
     curses.curs_set(0)
-
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Load Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
+
     instructions = [
         "↑/↓ = select, ENTER=load, 'e' = edit, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
@@ -39,18 +34,14 @@ def draw_load_map_screen(stdscr):
 
 
 def draw_save_map_screen(stdscr):
-    """
-    Clears screen, draws frame/title/art/instructions for Save Map.
-    Does NOT do final stdscr.refresh() here, so callers can manage highlights.
-    """
     stdscr.clear()
     stdscr.nodelay(False)
     stdscr.keypad(True)
     curses.curs_set(0)
-
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Save Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
+
     instructions = [
         "Select a map to overwrite, 'n'=new, 'q'=cancel, 'v'=toggle debug"
     ]
@@ -58,13 +49,8 @@ def draw_save_map_screen(stdscr):
 
 
 def prompt_for_filename(stdscr, prompt):
-    """
-    Show 'prompt', let user type a filename (up to 20 chars).
-    Returns the typed string or "" if canceled.
-    """
     init_colors()
     draw_save_map_screen(stdscr)
-
     max_h, max_w = stdscr.getmaxyx()
     row = 10
     if row < max_h - 1:
@@ -82,7 +68,7 @@ def prompt_for_filename(stdscr, prompt):
 def display_map_list(stdscr):
     """
     Shows a list of maps plus a top "Generate a new map"
-      - Index 0 => "Generate a new map"
+      - Index 0 => "Generate a new map>"
       - ...
       - 'q' => cancel => returns ""
       - 'e' => Editor mode
@@ -98,43 +84,34 @@ def display_map_list(stdscr):
     files.insert(0, "0) Generate a new map>")
 
     selected_index = 0
-    frame_count = 0  # For optional highlight animations
+    frame_count = 0  # for highlight animation updates
 
     while True:
         draw_load_map_screen(stdscr)
-
         max_h, max_w = stdscr.getmaxyx()
         row = 10
 
-        # Draw the map entries with highlight on selected_index
         for i, fname in enumerate(files):
             if row >= max_h - 2:
                 break
-
-            # For display, handle the "Generate" vs. file name
             if i == 0:
                 display_text = "Generate a new map"
             else:
                 display_text = f"{i}) {fname}"
 
             is_sel = (i == selected_index)
-
-            # Example usage: effect="REVERSE_BLINK", or try "FLASH", "GLOW", etc.
-            draw_selectable_line(
+            # The single global function => effect/speed from highlight_selector.py
+            draw_global_selector_line(
                 stdscr,
                 row,
                 f"> {display_text}" if is_sel else f"  {display_text}",
                 is_selected=is_sel,
-                color_name="UI_YELLOW",
-                effect="REVERSE_BLINK",  # or "FLASH"/"GLOW"/"SHIMMER"
                 frame=frame_count
             )
-
             row += 1
 
         stdscr.refresh()
         key = stdscr.getch()
-
         if key in (curses.KEY_UP, ord('w'), ord('W')):
             selected_index = max(0, selected_index - 1)
         elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
@@ -147,7 +124,6 @@ def display_map_list(stdscr):
         elif key in (ord('q'), ord('y')):
             return ""
         elif key == ord('e'):
-            # 'Edit' flow
             if selected_index == 0:
                 return ("EDIT_GENERATE", None)
             else:
@@ -163,7 +139,7 @@ def display_map_list(stdscr):
         if len(files) == 1:
             selected_index = 0
 
-        frame_count += 1  # increment for animation
+        frame_count += 1
 
 
 def display_map_list_for_save(stdscr):
@@ -255,23 +231,12 @@ def display_map_list_for_save(stdscr):
 
 
 def load_map_ui(stdscr):
-    """
-    Prompts the user (via curses) to select or generate a map.
-    Returns:
-      - "" if canceled
-      - a dict if "GENERATE" was chosen (the new map data)
-      - ("EDIT_GENERATE", data) if user chooses to generate then edit
-      - ("EDIT", filename) if user picks an existing map for editing
-      - or a string filename if user picks an existing map to play
-    """
     selection = display_map_list(stdscr)
     if not selection:
         return ""
-
     if selection == "GENERATE":
         from procedural_map_generator.generator import generate_procedural_map
         return generate_procedural_map()
-
     if isinstance(selection, tuple):
         if selection[0] == "EDIT_GENERATE":
             from procedural_map_generator.generator import generate_procedural_map
@@ -280,17 +245,12 @@ def load_map_ui(stdscr):
         elif selection[0] == "EDIT":
             return ("EDIT", selection[1])
         return ""
-
     return selection
 
 
 def save_map_ui(stdscr, placed_scenery, player=None,
                 world_width=100, world_height=100,
                 filename_override=None):
-    """
-    Prompts user to select a map file to overwrite or create a new file (unless 'filename_override' is given),
-    then saves the current map data (including optional player coords) to JSON.
-    """
     import map_io_main
     from map_io_storage import save_map_file
 
@@ -325,10 +285,6 @@ def save_map_ui(stdscr, placed_scenery, player=None,
 
 
 def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=None):
-    """
-    Displays a minimal yes/no prompt on the existing screen (no clear).
-    If 'y', calls save_map_ui. Otherwise skip saving.
-    """
     max_h, max_w = stdscr.getmaxyx()
     prompt = "Save this generated map? (y/n)"
 
@@ -355,7 +311,6 @@ def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height,
         elif key in (ord('n'), ord('N'), ord('q'), 27):  # ESC
             break
 
-    # Clean up the prompt
     try:
         stdscr.addstr(row, col, " " * len(prompt))
         stdscr.refresh()
