@@ -1,6 +1,8 @@
 # FileName: map_io_ui.py
-# version: 2.4 (Now using a single global highlight config from highlight_selector.py)
+# version: 2.6
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts).
+#          Updated to disable the extra "ask_save_generated_map_ui" prompt
+#          so we don't get two "save this generated map" dialogs.
 # Tags: map, ui, io
 
 import curses
@@ -63,6 +65,21 @@ def prompt_for_filename(stdscr, prompt):
         if filename_bytes:
             return filename_bytes.decode('utf-8', errors='ignore').strip()
     return ""
+
+
+def draw_load_map_screen(stdscr):
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Load Map", row=1)
+    draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
+
+    instructions = [
+        "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
 
 
 def display_map_list(stdscr):
@@ -273,6 +290,9 @@ def save_map_ui(stdscr, placed_scenery, player=None,
     if not os.path.isdir(maps_dir):
         os.makedirs(maps_dir, exist_ok=True)
 
+    save_path = os.path.join(maps_dir, filename)
+    file_existed = os.path.exists(save_path)  # Check if we're overwriting
+
     map_data = map_io_main.build_map_data(
         placed_scenery,
         player=player,
@@ -280,39 +300,30 @@ def save_map_ui(stdscr, placed_scenery, player=None,
         world_height=world_height
     )
 
-    save_path = os.path.join(maps_dir, filename)
+    # Actually save the file
     save_map_file(save_path, map_data)
+
+    # If file previously existed, show an overwrite notification
+    if file_existed:
+        try:
+            h, w = stdscr.getmaxyx()
+            msg = f"Quick-save overwrote existing file: {filename}"
+            row = 2
+            col = 2
+            stdscr.addstr(row, col, msg, curses.color_pair(color_pairs["UI_YELLOW"]))
+            stdscr.refresh()
+            curses.napms(1500)  # Pause 1.5s so user can see the message
+        except:
+            pass
+    else:
+        # Optional: show a "Saved new file" message if you want
+        pass
 
 
 def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=None):
-    max_h, max_w = stdscr.getmaxyx()
-    prompt = "Save this generated map? (y/n)"
-
-    curses.curs_set(0)
-    stdscr.nodelay(False)
-    stdscr.keypad(True)
-
-    row = max_h - 2
-    col = 2
-
-    try:
-        stdscr.addstr(row, col, prompt, curses.A_BOLD)
-    except:
-        pass
-    stdscr.refresh()
-
-    while True:
-        key = stdscr.getch()
-        if key in (ord('y'), ord('Y')):
-            save_map_ui(stdscr, placed_scenery, player,
-                        world_width=world_width,
-                        world_height=world_height)
-            break
-        elif key in (ord('n'), ord('N'), ord('q'), 27):  # ESC
-            break
-
-    try:
-        stdscr.addstr(row, col, " " * len(prompt))
-        stdscr.refresh()
-    except:
-        pass
+    """
+    Disabled to avoid duplicate "save this generated map? (y/n)" pop-up.
+    The inline prompt in handle_common_keys now handles this.
+    """
+    # We simply do nothing here, so there's no second yes/no prompt
+    return

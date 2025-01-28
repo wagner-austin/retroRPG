@@ -1,11 +1,10 @@
 # FileName: controls_main.py
-# version: 2.6
+# version: 2.9
 # Summary: Interprets user input for both play and editor modes, including movement, undo, toggles, etc.
+#          Modified so that the inline yes/no prompt for generated maps appears at the bottom of the screen.
 # Tags: controls, input, main
 
 import curses
-# We now import these helpers from scenery_main so we can properly
-# handle dictionary-based scenery
 from scenery_main import (
     place_scenery_item,
     _get_objects_at,
@@ -13,22 +12,20 @@ from scenery_main import (
     _append_scenery
 )
 from utils_main import get_front_tile
-
-# Import the unified debug configuration
 import debug
+
 
 def handle_common_keys(key, model, stdscr, mark_dirty_func):
     """
     Handle keys that apply to *both* play and editor modes:
-      - Quitting (y)
-      - Movement (WASD or arrow keys, uppercase or lowercase)
+      - Quitting (y):
+         * If existing map => quick-save silently, then quit
+         * If generated map => prompt "Save? y/n" at the bottom of the screen;
+           if y => do the normal save UI logic, else skip, then quit
+      - Movement (WASD or arrow keys)
       - Debug toggle (v)
       - Mode switch (e)
-      - Unified quick-save (o):
-         -> If model.loaded_map_filename is set, overwrite that file
-         -> otherwise prompt for new filename
-
-    Returns (did_move, should_quit)
+      - Quick-save (o)
     """
     player = model.player
     context = model.context
@@ -36,9 +33,73 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
     did_move = False
     should_quit = False
 
+    def _perform_quick_save():
+        from map_io_ui import save_map_ui
+        # If we have a loaded filename, overwrite it
+        if hasattr(model, "loaded_map_filename") and model.loaded_map_filename:
+            save_map_ui(
+                stdscr,
+                model.placed_scenery,
+                player=model.player,
+                world_width=model.world_width,
+                world_height=model.world_height,
+                filename_override=model.loaded_map_filename
+            )
+        else:
+            # Prompt for new filename
+            save_map_ui(
+                stdscr,
+                model.placed_scenery,
+                player=model.player,
+                world_width=model.world_width,
+                world_height=model.world_height,
+                filename_override=None
+            )
+        model.full_redraw_needed = True
+
+    def _prompt_yes_no(stdscr, question="Save this generated map? (y/n)"):
+        """
+        Inline yes/no prompt at the bottom of the screen.
+        Returns True if user pressed y/Y, False if n/N.
+        """
+        max_h, max_w = stdscr.getmaxyx()
+        qy = max_h - 1  # bottom row
+        qx = 2
+
+        # Try clearing that line
+        try:
+            stdscr.move(qy, 0)
+            stdscr.clrtoeol()
+        except:
+            pass
+
+        # Now print the prompt
+        try:
+            stdscr.addstr(qy, qx, question, curses.color_pair(0))
+            stdscr.refresh()
+        except:
+            pass
+
+        while True:
+            c = stdscr.getch()
+            if c in (ord('y'), ord('Y')):
+                return True
+            elif c in (ord('n'), ord('N')):
+                return False
+
     # Quit key
     if key == ord('y'):
-        should_quit = True
+        # Check if it's an existing map or generated
+        if model.loaded_map_filename:
+            # 1) Existing map => silent quick-save, then quit
+            _perform_quick_save()
+            should_quit = True
+        else:
+            # 2) Generated map => prompt user at bottom row
+            save_decision = _prompt_yes_no(stdscr, "Save this generated map? (y/n)")
+            if save_decision:
+                _perform_quick_save()
+            should_quit = True
         return (did_move, should_quit)
 
     # Movement (WASD or arrow keys), factoring in debug walk speed
@@ -103,32 +164,9 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
 
         model.full_redraw_needed = True
 
-    # Quick-save
+    # Quick-save with 'o'
     elif key == ord('o'):
-        from map_io_ui import save_map_ui
-        # If we have a loaded filename, overwrite it
-        if hasattr(model, "loaded_map_filename") and model.loaded_map_filename:
-            # Call save_map with a forced filename
-            save_map_ui(
-                stdscr,
-                model.placed_scenery,
-                player=model.player,  # so we store player coords if wanted
-                world_width=model.world_width,
-                world_height=model.world_height,
-                filename_override=model.loaded_map_filename
-            )
-        else:
-            # Prompt for new filename
-            save_map_ui(
-                stdscr,
-                model.placed_scenery,
-                player=model.player,
-                world_width=model.world_width,
-                world_height=model.world_height,
-                filename_override=None
-            )
-
-        model.full_redraw_needed = True
+        _perform_quick_save()
 
     return (did_move, should_quit)
 

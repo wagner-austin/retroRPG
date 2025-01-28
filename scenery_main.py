@@ -1,8 +1,9 @@
 # FileName: scenery_main.py
-# version: 3.4
+# version: 3.5
 # Summary: Manages all scenery objects (trees, rocks, bridges), ensuring "floor" tiles
 #          (grass, river, path, etc.) are placed at the bottom of the stack.
-#          Updated so bridge tiles (#) keep the underlying river floor, inheriting its background color.
+#          Also ensures robust handling of '_prev_floor' in legacy or partially-initialized tiles,
+#          so we don't get KeyError on deletion.
 # Tags: scenery, map, collision
 
 from scenery_defs import (
@@ -57,7 +58,7 @@ ITEM_TYPE_IDS = set()
 ENTITIES_TYPE_IDS = set()
 
 ##############################################################################
-# LEGACY REGISTER FUNCTIONALITY (unchanged)
+# LEGACY REGISTER FUNCTIONALITY
 ##############################################################################
 def register_scenery(definition_id, char, color_pair, blocking, placeable):
     ALL_SCENERY_DEFS[definition_id] = {
@@ -75,7 +76,7 @@ def get_placeable_scenery_defs():
     ]
 
 ##############################################################################
-# Build forward/reverse maps (unchanged)
+# Build forward/reverse maps
 ##############################################################################
 def build_forward_map():
     forward = {}
@@ -185,16 +186,14 @@ def _append_scenery(placed_scenery, obj):
     x, y = obj.x, obj.y
     _init_tile_layers(placed_scenery, x, y)
 
-    layer_name = _layer_for_def_id(obj.definition_id)
     tile_layers = placed_scenery[(x,y)]
+    layer_name = _layer_for_def_id(obj.definition_id)
 
     if layer_name == FLOOR_LAYER:
-        # Overwrite the old floor, but remember it
         if tile_layers[FLOOR_LAYER] and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id:
             tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
         tile_layers[FLOOR_LAYER] = obj
     else:
-        # If no floor is currently set, default to EMPTY_FLOOR
         if tile_layers[FLOOR_LAYER] is None:
             from scenery_main import SceneryObject, EMPTY_FLOOR_ID
             tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
@@ -204,8 +203,8 @@ def _remove_scenery(placed_scenery, obj):
     """
     Removes 'obj' from whichever layer it belongs to.
     If removing a floor object:
-        - If '_prev_floor' is not None, revert to that old floor
-        - otherwise, set floor to None
+      - If '_prev_floor' is not None, revert to that old floor
+      - Otherwise, set floor to None
     Then if everything is empty/no floor, we set floor to EMPTY_FLOOR.
     """
     x, y = obj.x, obj.y
@@ -213,18 +212,19 @@ def _remove_scenery(placed_scenery, obj):
         return
 
     tile_layers = placed_scenery[(x,y)]
+    # Ensure _prev_floor is set (avoid KeyError if tile data was not fully init):
+    if '_prev_floor' not in tile_layers:
+        tile_layers['_prev_floor'] = None
+
     layer_name = _layer_for_def_id(obj.definition_id)
 
     if layer_name == FLOOR_LAYER:
-        # If we're actually removing the tile that is currently the floor:
         if tile_layers[FLOOR_LAYER] == obj:
-            # revert if there's a stored old floor
             if tile_layers['_prev_floor'] is not None:
                 tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
                 tile_layers['_prev_floor'] = None
             else:
                 tile_layers[FLOOR_LAYER] = None
-
     elif layer_name == OBJECTS_LAYER:
         if obj in tile_layers[OBJECTS_LAYER]:
             tile_layers[OBJECTS_LAYER].remove(obj)
@@ -266,7 +266,7 @@ def is_blocked(x, y, placed_scenery):
     merged_stack = _get_objects_at(placed_scenery, x, y)
     if not merged_stack:
         return False
-    top_obj = merged_stack[-1]  # topmost
+    top_obj = merged_stack[-1]
     info = ALL_SCENERY_DEFS.get(top_obj.definition_id, None)
     return (info and info.get("blocking", False))
 
@@ -290,10 +290,6 @@ def get_scenery_color_at(x, y, placed_scenery):
 ##############################################################################
 def place_scenery_item(def_id, player, placed_scenery, mark_dirty_func,
                        is_editor=False, world_width=100, world_height=60):
-    """
-    Places a tile or object at the player's position, preserving the existing floor.
-    If def_id is floor => overwrites old floor but keeps it in _prev_floor for potential restore.
-    """
     newly_placed = []
 
     if def_id == BRIDGE_TOOL_ID and is_editor:
@@ -310,7 +306,6 @@ def place_scenery_item(def_id, player, placed_scenery, mark_dirty_func,
         if top_obj:
             newly_placed.append(top_obj)
     else:
-        # single tile
         obj = _place_single_tile(player.x, player.y, def_id,
                                  placed_scenery, mark_dirty_func)
         newly_placed.append(obj)
@@ -334,10 +329,6 @@ def place_tree(player, placed_scenery, mark_dirty_func):
 def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
                               world_width=100, world_height=60,
                               is_editor=False):
-    """
-    Creates a bridge (#) object over each discovered river tile, without removing the river floor.
-    Thus, the bridge inherits the river's background color in rendering.
-    """
     dx = dy = 0
     if player.last_move_direction == "up":
         dy = -1
@@ -371,18 +362,17 @@ def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
     newly_placed = []
     for wobj in water_tiles:
         # Keep the river as the floor, do NOT remove it.
-        # Remove any existing BridgeEnd in that same tile (we only want a single bridging object).
+        # Remove any existing BridgeEnd in that same tile.
         tile_objs2 = _get_objects_at(placed_scenery, wobj.x, wobj.y)
         endpoints = [o for o in tile_objs2 if o.definition_id == BRIDGE_END_ID]
         for e in endpoints:
             _remove_scenery(placed_scenery, e)
 
         new_bridge = SceneryObject(wobj.x, wobj.y, BRIDGE_ID)
-        _append_scenery(placed_scenery, new_bridge)   # place as an object
+        _append_scenery(placed_scenery, new_bridge)
         mark_dirty_func(wobj.x, wobj.y)
         newly_placed.append(new_bridge)
 
-    # Also place "bridge ends" at the start and end of the chain
     start_x = water_tiles[0].x - dx
     start_y = water_tiles[0].y - dy
     end_x   = water_tiles[-1].x + dx
