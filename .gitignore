@@ -5,4 +5,4 @@
 
 # Added lines to ensure __pycache__ and .pyc files in *all* subdirectories are ignored:
 **/__pycache__/
-**/*.pyc
+**/*.pycsummary_print/all_results_*.txt
