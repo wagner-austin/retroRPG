@@ -29,7 +29,6 @@ def draw_load_map_screen(stdscr):
     draw_title(stdscr, "Load Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
-    # Instructions now white instead of magenta
     instructions = [
         "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
@@ -45,10 +44,11 @@ def draw_save_map_screen(stdscr):
     draw_title(stdscr, "Save Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
+    # Changed to WHITE_TEXT so "Select a map to overwrite..." is in white
     instructions = [
         "Select a map to overwrite, 'n'=new, 'ENTER'=cancel, 'v'=toggle debug"
     ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_MAGENTA")
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
 
 
 def prompt_for_filename(stdscr, prompt):
@@ -82,7 +82,6 @@ def prompt_delete_confirmation(stdscr, filename):
     question = f"Delete '{filename}'? (y/n)"
     attr = get_color_attr("WHITE_TEXT")
 
-    # We'll draw it on the bottom row or near it
     row = max_h - 2
     safe_addstr(stdscr, row, 2, " " * (max_w - 4), attr, clip_borders=False)
     safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
@@ -146,7 +145,7 @@ def display_map_list(stdscr):
         elif key in (ord('q'), ord('y')):
             return ""
         elif key == ord('e'):
-            # If user typed 'e', we interpret that as edit
+            # If user typed 'e', interpret that as edit
             if selected_index == 0:
                 return ("EDIT_GENERATE", None)
             else:
@@ -154,7 +153,6 @@ def display_map_list(stdscr):
         elif key == ord('v'):
             debug.toggle_debug()
         elif key == ord('d'):
-            # Delete function
             if selected_index > 0:  # index 0 is "Generate a new map>", cannot be deleted
                 to_delete = files[selected_index]
                 confirm = prompt_delete_confirmation(stdscr, to_delete)
@@ -163,7 +161,6 @@ def display_map_list(stdscr):
                         os.remove(os.path.join(maps_dir, to_delete))
                     except OSError:
                         pass
-                    # remove from list
                     del files[selected_index]
                     if selected_index >= len(files):
                         selected_index = len(files) - 1
@@ -173,7 +170,6 @@ def display_map_list(stdscr):
                 selected_index = typed
 
         if len(files) == 1:
-            # If only one entry, it's "Generate a new map>", so keep selected_index=0
             selected_index = 0
 
         frame_count += 1

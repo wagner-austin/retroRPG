@@ -1,23 +1,23 @@
 # FileName: controls_main.py
-# version: 2.9
-# Summary: Interprets user input for both play and editor modes, including movement, undo, toggles, etc.
+# version: 2.13
+# Summary: Interprets user input for both play and editor modes, including quick-save using 'renderer' instead of stdscr.
 # Tags: controls, input, main
 
 import curses
+import debug
 from scenery_main import (
-    place_scenery_item,
-    get_objects_at,      # renamed from _get_objects_at
-    remove_scenery,      # renamed from _remove_scenery
-    append_scenery       # renamed from _append_scenery
+    get_objects_at,
+    remove_scenery,
+    append_scenery
 )
 from utils_main import get_front_tile
-import debug
 
-def handle_common_keys(key, model, stdscr, mark_dirty_func):
+
+def handle_common_keys(key, model, renderer, mark_dirty_func):
     """
     Handle keys that apply to *both* play and editor modes:
       - Quitting (y)
-      - Movement (WASD or arrow keys)
+      - Movement (WASD/arrows)
       - Debug toggle (v)
       - Mode switch (e)
       - Quick-save (o)
@@ -30,10 +30,11 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
 
     def _perform_quick_save():
         from map_io_ui import save_map_ui
-        # If we have a loaded filename, overwrite it
-        if hasattr(model, "loaded_map_filename") and model.loaded_map_filename:
+        # We pass 'renderer.stdscr' so it can do curses-based UI prompts
+        if model.loaded_map_filename:
+            # Overwrite existing
             save_map_ui(
-                stdscr,
+                renderer.stdscr,
                 model.placed_scenery,
                 player=model.player,
                 world_width=model.world_width,
@@ -41,9 +42,9 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
                 filename_override=model.loaded_map_filename
             )
         else:
-            # Prompt for new filename
+            # Prompt user for new name
             save_map_ui(
-                stdscr,
+                renderer.stdscr,
                 model.placed_scenery,
                 player=model.player,
                 world_width=model.world_width,
@@ -52,38 +53,19 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
             )
         model.full_redraw_needed = True
 
-    def _prompt_yes_no(stdscr, question="Save this generated map? (y/n)"):
-        max_h, max_w = stdscr.getmaxyx()
-        qy = max_h - 1  # bottom row
-        qx = 2
-        try:
-            stdscr.move(qy, 0)
-            stdscr.clrtoeol()
-        except:
-            pass
-        try:
-            stdscr.addstr(qy, qx, question, curses.color_pair(0))
-            stdscr.refresh()
-        except:
-            pass
+    def _prompt_yes_no(question):
+        if renderer is None:
+            return False
+        return renderer.prompt_yes_no(question)
 
-        while True:
-            c = stdscr.getch()
-            if c in (ord('y'), ord('Y')):
-                return True
-            elif c in (ord('n'), ord('N')):
-                return False
-
-    # Quit key
+    # 'y' => Quit
     if key == ord('y'):
-        # Check if it's an existing map or generated
         if model.loaded_map_filename:
-            # 1) Existing map => silent quick-save, then quit
             _perform_quick_save()
             should_quit = True
         else:
-            # 2) Generated map => prompt user
-            save_decision = _prompt_yes_no(stdscr, "Save this generated map? (y/n)")
+            # Generated => ask user
+            save_decision = _prompt_yes_no("Save this generated map? (y/n)")
             if save_decision:
                 _perform_quick_save()
             should_quit = True
@@ -126,12 +108,12 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
                 mark_dirty_func(player.x, player.y)
                 did_move = True
 
-    # Toggle Debug Mode
+    # Toggle Debug
     elif key == ord('v'):
         debug.toggle_debug()
         model.full_redraw_needed = True
 
-    # Switch between play and editor mode using 'e'
+    # Switch between play/editor
     elif key == ord('e'):
         if context.mode_name == "play":
             context.mode_name = "editor"
@@ -151,20 +133,20 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
 
         model.full_redraw_needed = True
 
-    # Quick-save with 'o'
+    # 'o' => Quick save
     elif key == ord('o'):
         _perform_quick_save()
 
     return (did_move, should_quit)
 
 
-def handle_editor_keys(key, model, stdscr, full_redraw_needed, mark_dirty_func):
+def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func):
     """
-    Editor-only keys:
-      - p (Place object)
-      - x (Delete the topmost object at player's tile)
-      - u (Undo last place or delete)
-      - l, k (Next/Prev item)
+    Editor-only:
+      - p => place object
+      - x => remove topmost
+      - u => undo
+      - l/k => cycle object
     """
     if not model.context.enable_editor_commands:
         return full_redraw_needed
@@ -172,6 +154,13 @@ def handle_editor_keys(key, model, stdscr, full_redraw_needed, mark_dirty_func):
     editor_scenery_list = model.editor_scenery_list
     editor_scenery_index = model.editor_scenery_index
     player = model.player
+
+    from scenery_main import (
+        place_scenery_item,
+        get_objects_at,
+        remove_scenery,
+        append_scenery
+    )
 
     if key == ord('p'):
         if editor_scenery_list:
@@ -224,7 +213,7 @@ def handle_editor_keys(key, model, stdscr, full_redraw_needed, mark_dirty_func):
 
 def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
     """
-    Play-mode-specific keys, e.g. space for chop or mine.
+    Play-mode keys: space => chop/mine
     """
     if model.context.enable_editor_commands:
         return full_redraw_needed
@@ -233,10 +222,10 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
     from_scenery = model.placed_scenery
     if key == ord(' '):
         fx, fy = get_front_tile(player)
+        tile_objs = get_objects_at(from_scenery, fx, fy)
         found_something = False
         removed_objs = []
 
-        tile_objs = get_objects_at(from_scenery, fx, fy)
         trunk = next((o for o in tile_objs if o.definition_id == "TreeTrunk"), None)
         if trunk:
             found_something = True
@@ -250,7 +239,7 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
                 removed_objs.append(top_o)
 
             if model.context.enable_respawn:
-                sublist = [(obj.x, obj.y, obj.char, obj.color_pair) for obj in removed_objs]
+                sublist = [(obj.x, obj.y, obj.definition_id) for obj in removed_objs]
                 model.respawn_list.append({"countdown": 50, "objects": sublist})
 
         rock_o = next((o for o in tile_objs if o.definition_id == "Rock"), None)
@@ -259,8 +248,9 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
             removed_objs.append(rock_o)
             player.stone += 1
             full_redraw_needed = True
+
             if model.context.enable_respawn:
-                sublist = [(rock_o.x, rock_o.y, rock_o.char, rock_o.color_pair)]
+                sublist = [(rock_o.x, rock_o.y, rock_o.definition_id)]
                 model.respawn_list.append({"countdown": 50, "objects": sublist})
 
         if found_something:

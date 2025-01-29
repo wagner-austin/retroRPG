@@ -1,32 +1,26 @@
 # FileName: play_runner.py
-# version: 2.0 (updated to fix player position bug)
-# Summary: Orchestrates map loading (parse_and_run_play/editor), calling engine_main for either mode.
+# version: 2.3 (ensures placed_scenery is layered)
+# Summary: Orchestrates loading a map and calling the engine with a chosen front-end.
 # Tags: play, runner, map, editor
 
 import os
 import json
 import curses
 
+from map_io_storage import parse_map_dict
 from player_char import Player
 from player_char_io import load_player, save_player
-from scenery_main import SceneryObject
-from engine_main import run_engine, GameContext
+from scenery_main import SceneryObject, ensure_layered_format  # <-- we import ensure_layered_format
+from model_main import GameModel, GameContext
+from curses_ui import run_game_with_curses
+from engine_main import run_engine
 
-# We'll import parse_map_dict directly from map_io_storage:
-from map_io_storage import parse_map_dict, load_map_file
-
-# For UI-based saving logic:
-from map_io_ui import save_map_ui, ask_save_generated_map_ui
 
 def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     """
-    If filename_or_data is a dict => parse the map data directly,
-    else load the JSON map from disk => parse => run editor mode.
-
-    After the editor exits, we always save player data.
-    If this map was generated, we also prompt if they want to save scenery.
+    Loads/Parses the map data, sets up model in 'editor' mode,
+    then calls run_game_with_curses(...).
     """
-    # 1) Load or parse raw map data
     if isinstance(filename_or_data, dict):
         raw_data = filename_or_data
         model_filename = None
@@ -40,18 +34,17 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
         except:
             return
 
-    # 2) Convert raw dict -> structured map_data
     map_data = parse_map_dict(raw_data)
     world_width = map_data["world_width"]
     world_height = map_data["world_height"]
     sinfo = map_data["scenery"]
 
-    # 3) Load or create the Player
+    # Load or create player
     player = load_player()
     if not player:
         player = Player()
 
-    # 4) If newly generated, center player. Otherwise, if map_data has coords, use them.
+    # Position player
     if is_generated:
         player.x = world_width // 2
         player.y = world_height // 2
@@ -62,11 +55,11 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             player.x = px
             player.y = py
 
-    # 5) Clamp
+    # Clamp
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # 6) Build placed_scenery as a dict-of-lists
+    # Build placed_scenery from the map (initially a dict-of-lists):
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
@@ -74,47 +67,41 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
 
-    # 7) Run the engine in 'editor' mode
-    context = GameContext(mode_name="editor")
-    run_engine(
-        stdscr,
-        context,
-        player,
-        placed_scenery,
-        respawn_list=None,
-        map_top_offset=3,
-        world_width=world_width,
-        world_height=world_height,
-        loaded_map_filename=None if is_generated else model_filename
-    )
+    # Convert the old dict-of-lists into a layered dict
+    placed_scenery = ensure_layered_format(placed_scenery)
 
-    # 8) After user quits, save the player data globally
+    # Create model & context
+    model = GameModel()
+    model.player = player
+    model.placed_scenery = placed_scenery
+    model.world_width = world_width
+    model.world_height = world_height
+    model.loaded_map_filename = None if is_generated else model_filename
+
+    context = GameContext("editor")
+
+    # Launch with curses
+    run_game_with_curses(stdscr, context, model, run_engine)
+
+    # Save player data
     save_player(player)
 
-    # 8.5) If this was a non-generated map, automatically update the map's JSON with new coords
+    # If not generated, store new coords in the map file
     if (not is_generated) and model_filename:
         maps_dir = "maps"
         map_path = os.path.join(maps_dir, model_filename)
-        from map_io_main import load_map_data
-        from map_io_storage import save_map_file
-
-        existing_data = load_map_data(map_path)
-        if existing_data:
+        if os.path.exists(map_path):
+            with open(map_path, "r") as f:
+                existing_data = json.load(f)
             existing_data["player_x"] = player.x
             existing_data["player_y"] = player.y
+            from map_io_storage import save_map_file
             save_map_file(map_path, existing_data)
 
-    # 9) If it's a generated map, prompt for saving
-    if is_generated:
-        ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=player)
 
 def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     """
-    If it's a dict => parse directly (generated map),
-    else load from file => parse => run "play" mode.
-
-    After the user exits, we always save player data.
-    If this map was generated, prompt to save scenery.
+    Similar to parse_and_run_editor, but 'play' mode.
     """
     if isinstance(filename_or_data, dict):
         raw_data = filename_or_data
@@ -134,12 +121,11 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     world_height = map_data["world_height"]
     sinfo = map_data["scenery"]
 
-    # 1) Load or create the Player
+    # Load or create player
     player = load_player()
     if not player:
         player = Player()
 
-    # 2) If newly generated, center. Else, if coords exist in file, use them.
     if is_generated:
         player.x = world_width // 2
         player.y = world_height // 2
@@ -150,11 +136,11 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
             player.x = px
             player.y = py
 
-    # 3) Clamp
+    # Clamp
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # 4) Build placed_scenery
+    # Build scenery (old style dict-of-lists):
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
@@ -162,36 +148,31 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
 
-    # 5) Run the engine in 'play' mode
-    ctx = GameContext(mode_name="play")
-    run_engine(
-        stdscr,
-        ctx,
-        player,
-        placed_scenery,
-        respawn_list=[],
-        map_top_offset=3,
-        world_width=world_width,
-        world_height=world_height,
-        loaded_map_filename=None if is_generated else model_filename
-    )
+    # Convert to layered format
+    placed_scenery = ensure_layered_format(placed_scenery)
 
-    # 6) Once user quits, save the Player globally
+    model = GameModel()
+    model.player = player
+    model.placed_scenery = placed_scenery
+    model.world_width = world_width
+    model.world_height = world_height
+    model.loaded_map_filename = None if is_generated else model_filename
+
+    context = GameContext("play")
+
+    run_game_with_curses(stdscr, context, model, run_engine)
+
+    # Save player
     save_player(player)
 
-    # 6.5) For a non-generated map, also update that map's JSON with the new coords
+    # If not generated, store new coords
     if (not is_generated) and model_filename:
         maps_dir = "maps"
         map_path = os.path.join(maps_dir, model_filename)
-        from map_io_main import load_map_data
-        from map_io_storage import save_map_file
-
-        existing_data = load_map_data(map_path)
-        if existing_data:
+        if os.path.exists(map_path):
+            with open(map_path, "r") as f:
+                existing_data = json.load(f)
             existing_data["player_x"] = player.x
             existing_data["player_y"] = player.y
+            from map_io_storage import save_map_file
             save_map_file(map_path, existing_data)
-
-    # 7) If it's a generated map, prompt to save scenery
-    if is_generated:
-        ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=player)
