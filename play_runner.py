@@ -1,6 +1,6 @@
 # FileName: play_runner.py
-# version: 2.3 (ensures placed_scenery is layered)
-# Summary: Orchestrates loading a map and calling the engine with a chosen front-end.
+# version: 3.0 (now calls run_game_loop with CursesGameInput/CursesGameRenderer)
+# Summary: Orchestrates loading a map and calling the new engine loop for play or editor mode.
 # Tags: play, runner, map, editor
 
 import os
@@ -10,16 +10,20 @@ import curses
 from map_io_storage import parse_map_dict
 from player_char import Player
 from player_char_io import load_player, save_player
-from scenery_main import SceneryObject, ensure_layered_format  # <-- we import ensure_layered_format
+from scenery_main import SceneryObject, ensure_layered_format
 from model_main import GameModel, GameContext
-from curses_ui import run_game_with_curses
-from engine_main import run_engine
 
+# We now import the new front-end classes and the new engine loop:
+from curses_ui import CursesGameInput, CursesGameRenderer
+from engine_main import run_game_loop
 
+##############################################################################
+# EDITOR
+##############################################################################
 def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     """
     Loads/Parses the map data, sets up model in 'editor' mode,
-    then calls run_game_with_curses(...).
+    then calls run_game_loop with the curses front-end.
     """
     if isinstance(filename_or_data, dict):
         raw_data = filename_or_data
@@ -59,7 +63,7 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # Build placed_scenery from the map (initially a dict-of-lists):
+    # Build placed_scenery
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
@@ -67,7 +71,7 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
 
-    # Convert the old dict-of-lists into a layered dict
+    # Convert old dict-of-lists into layered structure
     placed_scenery = ensure_layered_format(placed_scenery)
 
     # Create model & context
@@ -80,8 +84,12 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
 
     context = GameContext("editor")
 
-    # Launch with curses
-    run_game_with_curses(stdscr, context, model, run_engine)
+    # Instantiate curses front-end
+    game_input = CursesGameInput(stdscr)
+    game_renderer = CursesGameRenderer(stdscr)
+
+    # Enter the main logic loop
+    run_game_loop(model, context, game_input, game_renderer)
 
     # Save player data
     save_player(player)
@@ -99,6 +107,9 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             save_map_file(map_path, existing_data)
 
 
+##############################################################################
+# PLAY
+##############################################################################
 def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     """
     Similar to parse_and_run_editor, but 'play' mode.
@@ -121,7 +132,7 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     world_height = map_data["world_height"]
     sinfo = map_data["scenery"]
 
-    # Load or create player
+    # Load/create player
     player = load_player()
     if not player:
         player = Player()
@@ -140,17 +151,16 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     player.x = max(0, min(player.x, world_width - 1))
     player.y = max(0, min(player.y, world_height - 1))
 
-    # Build scenery (old style dict-of-lists):
+    # Build scenery => layered format
     placed_scenery = {}
     for s in sinfo:
         if "definition_id" in s:
             x, y = s["x"], s["y"]
             obj = SceneryObject(x, y, s["definition_id"])
             placed_scenery.setdefault((x, y), []).append(obj)
-
-    # Convert to layered format
     placed_scenery = ensure_layered_format(placed_scenery)
 
+    # Create model & context
     model = GameModel()
     model.player = player
     model.placed_scenery = placed_scenery
@@ -160,7 +170,12 @@ def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
 
     context = GameContext("play")
 
-    run_game_with_curses(stdscr, context, model, run_engine)
+    # Instantiate curses front-end
+    game_input = CursesGameInput(stdscr)
+    game_renderer = CursesGameRenderer(stdscr)
+
+    # Start main logic loop
+    run_game_loop(model, context, game_input, game_renderer)
 
     # Save player
     save_player(player)

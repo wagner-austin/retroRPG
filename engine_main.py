@@ -1,6 +1,6 @@
 # FileName: engine_main.py
-# version: 2.15 (call center_camera_on_player at startup)
-# Summary: Core game loop with no direct curses references.
+# version: 3.2
+# Summary: Core game loop using IGameRenderer & IGameInput. Skips final render if should_quit is set.
 # Tags: engine, main, loop
 
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
@@ -20,54 +20,64 @@ from scenery_main import (
 )
 import debug
 
-
-def run_engine(model, context, input_func, renderer):
+def run_game_loop(model, context, game_input, game_renderer):
     """
-    The main logic loop, with no direct curses calls:
-      - model: GameModel
-      - context: GameContext
-      - input_func: a callable returning an int key (or -1 if none)
-      - renderer: an object with methods like get_visible_size(), on_camera_move(...),
-                  full_redraw(...), update_dirty_tiles(...), prompt_yes_no(...).
-    We keep running until model.should_quit = True.
+    The main logic loop, using IGameRenderer & IGameInput interfaces.
     """
     model.context = context
 
-    # 1) Immediately center the camera on the player before the loop starts.
-    visible_cols, visible_rows = renderer.get_visible_size()
+    # Center camera on player once at start
+    visible_cols, visible_rows = game_renderer.get_visible_size()
     center_camera_on_player(model, visible_cols, visible_rows)
 
     model.full_redraw_needed = True
     model.should_quit = False
 
-    # Main loop
     while not model.should_quit:
-        # 2) Get input
-        key = input_func()  # Typically from curses
+        # 1) Get all actions
+        actions = game_input.get_actions()
+        for act in actions:
+            key = map_action_to_keycode(act)
+            if key is None:
+                # e.g. "QUIT" or unhandled
+                if act == "QUIT":
+                    model.should_quit = True
+                # optionally handle "YES_QUIT" here if needed
+                continue
 
-        # 3) Handle keys
-        if key != -1:
-            did_move, want_quit = handle_common_keys(key, model, renderer, lambda x, y: mark_dirty(model, x, y))
+            # Pass the key to old controls logic
+            did_move, want_quit = handle_common_keys(
+                key,
+                model,
+                game_renderer,
+                lambda x, y: mark_dirty(model, x, y)
+            )
             if want_quit:
                 model.should_quit = True
+                break
 
             model.full_redraw_needed = handle_editor_keys(
                 key,
                 model,
-                renderer,
+                game_renderer,
                 model.full_redraw_needed,
                 lambda x, y: mark_dirty(model, x, y)
             )
             model.full_redraw_needed = handle_play_keys(
                 key,
                 model,
+                game_renderer,
                 model.full_redraw_needed,
                 lambda x, y: mark_dirty(model, x, y)
             )
 
-        # 4) Camera logic
+        # If user triggered quit, break out immediately to skip final re-render
+        if model.should_quit:
+            break
+
+        # 2) Camera logic
         old_cam_x, old_cam_y = model.camera_x, model.camera_y
-        visible_cols, visible_rows = renderer.get_visible_size()
+        visible_cols, visible_rows = game_renderer.get_visible_size()
         model.camera_x, model.camera_y = update_camera_with_deadzone(
             model.player.x,
             model.player.y,
@@ -86,16 +96,20 @@ def run_engine(model, context, input_func, renderer):
             model.full_redraw_needed = True
         else:
             if dx != 0 or dy != 0:
-                renderer.on_camera_move(dx, dy, model)
+                game_renderer.on_camera_move(dx, dy, model)
 
-        # 5) Game updates
+        # 3) Game updates
         handle_network(model)
         update_npcs(model, lambda x, y: mark_dirty(model, x, y))
         handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
 
-        # sliding
-        if context.enable_sliding and key == -1:
-            tile_def_id = get_scenery_def_id_at(model.player.x, model.player.y, model.placed_scenery)
+        # sliding if no new actions
+        if context.enable_sliding and not actions:
+            tile_def_id = get_scenery_def_id_at(
+                model.player.x,
+                model.player.y,
+                model.placed_scenery
+            )
             old_px, old_py = model.player.x, model.player.y
             apply_tile_effects(
                 model.player,
@@ -111,21 +125,50 @@ def run_engine(model, context, input_func, renderer):
 
         update_action_flash(model, lambda x, y: mark_dirty(model, x, y))
 
-        # 6) Rendering
-        if model.full_redraw_needed:
-            renderer.full_redraw(model)
-            model.dirty_tiles.clear()
-            model.full_redraw_needed = False
-        else:
-            renderer.update_dirty_tiles(model)
-            model.dirty_tiles.clear()
+        # 4) Rendering
+        game_renderer.render(model)
+        model.dirty_tiles.clear()
 
-        # 7) Limit framerate
+        # 5) Framerate
         manage_framerate(20)
 
 
 def mark_dirty(model, x, y):
-    """
-    Marks a single tile (x,y) as 'dirty' => must be re-rendered.
-    """
     model.dirty_tiles.add((x, y))
+
+def map_action_to_keycode(action):
+    """
+    Map the action string to old integer key codes
+    for handle_common_keys, handle_editor_keys, etc.
+    """
+    if action == "QUIT":
+        return None
+    elif action == "YES_QUIT":
+        return ord('y')
+    elif action == "MOVE_UP":
+        return ord('w')
+    elif action == "MOVE_DOWN":
+        return ord('s')
+    elif action == "MOVE_LEFT":
+        return ord('a')
+    elif action == "MOVE_RIGHT":
+        return ord('d')
+    elif action == "EDITOR_TOGGLE":
+        return ord('e')
+    elif action == "SAVE_QUICK":
+        return ord('o')
+    elif action == "DEBUG_TOGGLE":
+        return ord('v')
+    elif action == "INTERACT":
+        return ord(' ')
+    elif action == "REMOVE_TOP":
+        return ord('x')
+    elif action == "PLACE_ITEM":
+        return ord('p')
+    elif action == "UNDO":
+        return ord('u')
+    elif action == "NEXT_ITEM":
+        return ord('l')
+    elif action == "PREV_ITEM":
+        return ord('k')
+    return None

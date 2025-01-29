@@ -1,6 +1,6 @@
 # FileName: controls_main.py
-# version: 2.13
-# Summary: Interprets user input for both play and editor modes, including quick-save using 'renderer' instead of stdscr.
+# version: 2.14
+# Summary: Interprets user input for both play and editor modes. Now uses renderer for UI save prompts.
 # Tags: controls, input, main
 
 import curses
@@ -29,12 +29,25 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
     should_quit = False
 
     def _perform_quick_save():
+        """
+        Called when user presses 'o'.
+        We need a curses window to prompt user for the save filename, so we use
+        renderer.get_curses_window() if available. If not, do nothing.
+        """
+        if not renderer:
+            return
+        # Attempt to get the curses window
+        if not hasattr(renderer, "get_curses_window"):
+            return
+        ui_win = renderer.get_curses_window()
+        if not ui_win:
+            return
+
         from map_io_ui import save_map_ui
-        # We pass 'renderer.stdscr' so it can do curses-based UI prompts
         if model.loaded_map_filename:
             # Overwrite existing
             save_map_ui(
-                renderer.stdscr,
+                ui_win,
                 model.placed_scenery,
                 player=model.player,
                 world_width=model.world_width,
@@ -44,7 +57,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
         else:
             # Prompt user for new name
             save_map_ui(
-                renderer.stdscr,
+                ui_win,
                 model.placed_scenery,
                 player=model.player,
                 world_width=model.world_width,
@@ -54,7 +67,14 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
         model.full_redraw_needed = True
 
     def _prompt_yes_no(question):
-        if renderer is None:
+        """
+        Called e.g. when pressing 'y' on a generated map.
+        We only show the prompt if we have a renderer with prompt_yes_no.
+        Otherwise, return False.
+        """
+        if not renderer:
+            return False
+        if not hasattr(renderer, "prompt_yes_no"):
             return False
         return renderer.prompt_yes_no(question)
 
@@ -211,7 +231,7 @@ def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func
     return full_redraw_needed
 
 
-def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
+def handle_play_keys(key, model, renderer, full_redraw_needed, mark_dirty_func):
     """
     Play-mode keys: space => chop/mine
     """

@@ -1,7 +1,6 @@
 # FileName: map_io_ui.py
-# version: 2.11
-# Summary: Contains curses-based UI routines (map list, save prompts, load prompts),
-#          uses safe_addstr for clip_borders.
+# version: 2.13
+# Summary: Contains curses-based UI routines for map loading & saving. Now fixes AttributeError by using stdscr.nodelay(True).
 # Tags: map, ui, io
 
 import curses
@@ -18,7 +17,6 @@ from ui_main import (
 from art_main import CROCODILE
 from highlight_selector import draw_global_selector_line
 from curses_utils import safe_addstr, safe_addch, get_color_attr
-
 
 def draw_load_map_screen(stdscr):
     stdscr.clear()
@@ -44,7 +42,6 @@ def draw_save_map_screen(stdscr):
     draw_title(stdscr, "Save Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
-    # Changed to WHITE_TEXT so "Select a map to overwrite..." is in white
     instructions = [
         "Select a map to overwrite, 'n'=new, 'ENTER'=cancel, 'v'=toggle debug"
     ]
@@ -55,17 +52,28 @@ def prompt_for_filename(stdscr, prompt):
     init_colors()
     draw_save_map_screen(stdscr)
     max_h, max_w = stdscr.getmaxyx()
+
+    # Make typed text visible
+    curses.echo()
+    curses.curs_set(1)
+    stdscr.nodelay(False)
+
     row = 10
     if row < max_h - 1:
-        stdscr.refresh()
         attr = get_color_attr("UI_CYAN")
         safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
         stdscr.refresh()
-        curses.echo()
+
         filename_bytes = stdscr.getstr(row, 2 + len(prompt) + 1, 20)
-        curses.noecho()
+
+        # revert to normal input mode
+        restore_input_mode(stdscr)
+
         if filename_bytes:
             return filename_bytes.decode('utf-8', errors='ignore').strip()
+
+    # Revert if something goes wrong
+    restore_input_mode(stdscr)
     return ""
 
 
@@ -76,7 +84,7 @@ def _draw_global_text(stdscr, row, text, attr):
 def prompt_delete_confirmation(stdscr, filename):
     """
     Prompt the user: "Delete <filename>? (y/n)"
-    Return True if the user chooses 'y', otherwise False.
+    Return True if user chooses 'y', otherwise False.
     """
     max_h, max_w = stdscr.getmaxyx()
     question = f"Delete '{filename}'? (y/n)"
@@ -87,12 +95,31 @@ def prompt_delete_confirmation(stdscr, filename):
     safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
     stdscr.refresh()
 
+    # Wait for 'y' or 'n'
+    stdscr.nodelay(False)
+    curses.curs_set(1)
+    curses.echo()
+
     while True:
         c = stdscr.getch()
         if c in (ord('y'), ord('Y')):
+            restore_input_mode(stdscr)
             return True
         elif c in (ord('n'), ord('N'), ord('q'), 27):
+            restore_input_mode(stdscr)
             return False
+
+
+def restore_input_mode(stdscr):
+    """
+    Restores standard "noecho", invisible cursor, non-blocking input mode.
+    Replaces the old usage of curses.nodelay(True), which doesn't exist at module level.
+    """
+    curses.noecho()
+    curses.curs_set(0)
+    curses.napms(50)
+    curses.flushinp()
+    stdscr.nodelay(True)
 
 
 def display_map_list(stdscr):
@@ -145,7 +172,6 @@ def display_map_list(stdscr):
         elif key in (ord('q'), ord('y')):
             return ""
         elif key == ord('e'):
-            # If user typed 'e', interpret that as edit
             if selected_index == 0:
                 return ("EDIT_GENERATE", None)
             else:
@@ -153,7 +179,7 @@ def display_map_list(stdscr):
         elif key == ord('v'):
             debug.toggle_debug()
         elif key == ord('d'):
-            if selected_index > 0:  # index 0 is "Generate a new map>", cannot be deleted
+            if selected_index > 0:
                 to_delete = files[selected_index]
                 confirm = prompt_delete_confirmation(stdscr, to_delete)
                 if confirm:
@@ -176,6 +202,10 @@ def display_map_list(stdscr):
 
 
 def display_map_list_for_save(stdscr):
+    """
+    Show the "save map" screen. Return either "NEW_FILE", a filename, or "" if canceled.
+    We enable echo() so typed input is visible.
+    """
     init_colors()
     maps_dir = "maps"
     if not os.path.isdir(maps_dir):
@@ -190,75 +220,75 @@ def display_map_list_for_save(stdscr):
         row = 10
 
         if files:
-            stdscr.refresh()
-            try:
-                attr_cyan = get_color_attr("UI_CYAN")
-                _draw_global_text(
-                    stdscr,
-                    row,
-                    "Maps (pick number to overwrite) or 'n' for new, 'v' toggles debug:",
-                    attr_cyan
-                )
-            except:
-                pass
+            attr_cyan = get_color_attr("UI_CYAN")
+            _draw_global_text(
+                stdscr,
+                row,
+                "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:",
+                attr_cyan
+            )
             row += 1
+
             for i, filename in enumerate(files, start=1):
                 if row >= max_h - 1:
                     break
-                try:
-                    attr_yellow = get_color_attr("YELLOW_TEXT")
-                    _draw_global_text(stdscr, row, f"{i}. {filename}", attr_yellow)
-                except:
-                    pass
+                attr_yellow = get_color_attr("YELLOW_TEXT")
+                _draw_global_text(stdscr, row, f"{i}. {filename}", attr_yellow)
                 row += 1
+
             if row < max_h - 1:
-                try:
-                    _draw_global_text(
-                        stdscr,
-                        row,
-                        "Enter choice or press Enter to cancel:",
-                        attr_cyan
-                    )
-                except:
-                    pass
-                row += 1
-        else:
-            stdscr.refresh()
-            try:
-                attr_cyan = get_color_attr("UI_CYAN")
                 _draw_global_text(
                     stdscr,
                     row,
-                    "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
+                    "Enter choice or press Enter to cancel:",
                     attr_cyan
                 )
-            except:
-                pass
+                row += 1
+        else:
+            attr_cyan = get_color_attr("UI_CYAN")
+            _draw_global_text(
+                stdscr,
+                row,
+                "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
+                attr_cyan
+            )
             row += 1
 
         stdscr.refresh()
-        try:
-            if row < max_h:
+
+        # Let user type their selection
+        stdscr.nodelay(False)
+        curses.curs_set(1)
+        curses.echo()
+
+        if row < max_h:
+            try:
                 selection_bytes = stdscr.getstr(row, 2, 20)
                 if not selection_bytes:
+                    restore_input_mode(stdscr)
                     return ""
                 selection = selection_bytes.decode('utf-8').strip()
-            else:
+            except:
+                restore_input_mode(stdscr)
                 return ""
+        else:
+            # row is out of range => just cancel
+            restore_input_mode(stdscr)
+            return ""
 
-            if not selection:
-                return ""
-            if selection.lower() == 'n':
-                return "NEW_FILE"
-            elif selection.lower() == 'v':
-                debug.toggle_debug()
-                continue
-            elif selection.isdigit():
-                idx = int(selection) - 1
-                if 0 <= idx < len(files):
-                    return files[idx]
-        except:
-            pass
+        restore_input_mode(stdscr)
+
+        if not selection:
+            return ""
+        if selection.lower() == 'n':
+            return "NEW_FILE"
+        elif selection.lower() == 'v':
+            debug.toggle_debug()
+            continue
+        elif selection.isdigit():
+            idx = int(selection) - 1
+            if 0 <= idx < len(files):
+                return files[idx]
 
 
 def load_map_ui(stdscr):
