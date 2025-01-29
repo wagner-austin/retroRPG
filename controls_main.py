@@ -1,27 +1,22 @@
 # FileName: controls_main.py
 # version: 2.9
 # Summary: Interprets user input for both play and editor modes, including movement, undo, toggles, etc.
-#          Modified so that the inline yes/no prompt for generated maps appears at the bottom of the screen.
 # Tags: controls, input, main
 
 import curses
 from scenery_main import (
     place_scenery_item,
-    _get_objects_at,
-    _remove_scenery,
-    _append_scenery
+    get_objects_at,      # renamed from _get_objects_at
+    remove_scenery,      # renamed from _remove_scenery
+    append_scenery       # renamed from _append_scenery
 )
 from utils_main import get_front_tile
 import debug
 
-
 def handle_common_keys(key, model, stdscr, mark_dirty_func):
     """
     Handle keys that apply to *both* play and editor modes:
-      - Quitting (y):
-         * If existing map => quick-save silently, then quit
-         * If generated map => prompt "Save? y/n" at the bottom of the screen;
-           if y => do the normal save UI logic, else skip, then quit
+      - Quitting (y)
       - Movement (WASD or arrow keys)
       - Debug toggle (v)
       - Mode switch (e)
@@ -29,7 +24,7 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
     """
     player = model.player
     context = model.context
-    
+
     did_move = False
     should_quit = False
 
@@ -58,22 +53,14 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
         model.full_redraw_needed = True
 
     def _prompt_yes_no(stdscr, question="Save this generated map? (y/n)"):
-        """
-        Inline yes/no prompt at the bottom of the screen.
-        Returns True if user pressed y/Y, False if n/N.
-        """
         max_h, max_w = stdscr.getmaxyx()
         qy = max_h - 1  # bottom row
         qx = 2
-
-        # Try clearing that line
         try:
             stdscr.move(qy, 0)
             stdscr.clrtoeol()
         except:
             pass
-
-        # Now print the prompt
         try:
             stdscr.addstr(qy, qx, question, curses.color_pair(0))
             stdscr.refresh()
@@ -95,14 +82,14 @@ def handle_common_keys(key, model, stdscr, mark_dirty_func):
             _perform_quick_save()
             should_quit = True
         else:
-            # 2) Generated map => prompt user at bottom row
+            # 2) Generated map => prompt user
             save_decision = _prompt_yes_no(stdscr, "Save this generated map? (y/n)")
             if save_decision:
                 _perform_quick_save()
             should_quit = True
         return (did_move, should_quit)
 
-    # Movement (WASD or arrow keys), factoring in debug walk speed
+    # Movement
     elif key in (ord('w'), ord('W'), curses.KEY_UP):
         for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
             old_x, old_y = player.x, player.y
@@ -203,10 +190,10 @@ def handle_editor_keys(key, model, stdscr, full_redraw_needed, mark_dirty_func):
 
     elif key == ord('x'):
         px, py = player.x, player.y
-        tile_objs = _get_objects_at(model.placed_scenery, px, py)
+        tile_objs = get_objects_at(model.placed_scenery, px, py)
         if tile_objs:
             top_obj = tile_objs[-1]
-            _remove_scenery(model.placed_scenery, top_obj)
+            remove_scenery(model.placed_scenery, top_obj)
             model.editor_undo_stack.append(("removed", [top_obj]))
             mark_dirty_func(px, py)
 
@@ -215,11 +202,11 @@ def handle_editor_keys(key, model, stdscr, full_redraw_needed, mark_dirty_func):
             action, objects_list = model.editor_undo_stack.pop()
             if action == "added":
                 for obj in reversed(objects_list):
-                    _remove_scenery(model.placed_scenery, obj)
+                    remove_scenery(model.placed_scenery, obj)
                     mark_dirty_func(obj.x, obj.y)
             elif action == "removed":
                 for obj in objects_list:
-                    _append_scenery(model.placed_scenery, obj)
+                    append_scenery(model.placed_scenery, obj)
                     mark_dirty_func(obj.x, obj.y)
 
     elif key == ord('l'):
@@ -249,7 +236,7 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
         found_something = False
         removed_objs = []
 
-        tile_objs = _get_objects_at(from_scenery, fx, fy)
+        tile_objs = get_objects_at(from_scenery, fx, fy)
         trunk = next((o for o in tile_objs if o.definition_id == "TreeTrunk"), None)
         if trunk:
             found_something = True
@@ -257,7 +244,7 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
             player.wood += 1
             full_redraw_needed = True
 
-            top_objs = _get_objects_at(from_scenery, fx, fy - 1)
+            top_objs = get_objects_at(from_scenery, fx, fy - 1)
             top_o = next((o for o in top_objs if o.definition_id == "TreeTop"), None)
             if top_o:
                 removed_objs.append(top_o)
@@ -278,7 +265,7 @@ def handle_play_keys(key, model, full_redraw_needed, mark_dirty_func):
 
         if found_something:
             for ro in removed_objs:
-                _remove_scenery(from_scenery, ro)
+                remove_scenery(from_scenery, ro)
                 mark_dirty_func(ro.x, ro.y)
 
             model.action_flash_info = (fx, fy, 1)

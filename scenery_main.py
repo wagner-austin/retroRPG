@@ -1,13 +1,14 @@
 # FileName: scenery_main.py
-# version: 3.5
+# version: 3.6 (renamed functions, moved ensure_layered_format)
 # Summary: Manages all scenery objects (trees, rocks, bridges), ensuring "floor" tiles
 #          (grass, river, path, etc.) are placed at the bottom of the stack.
-#          Also ensures robust handling of '_prev_floor' in legacy or partially-initialized tiles,
-#          so we don't get KeyError on deletion.
+#          Also ensures robust handling of '_prev_floor' in legacy or partially-initialized tiles.
 # Tags: scenery, map, collision
 
 from scenery_defs import (
-    ALL_SCENERY_DEFS,  # The shared dictionary from scenery_defs.py
+    ALL_SCENERY_DEFS,
+    build_forward_map,
+    build_reverse_map,
     TREE_TRUNK_ID,
     TREE_TOP_ID,
     ROCK_ID,
@@ -26,10 +27,10 @@ from scenery_defs import (
 ##############################################################################
 # 0) LAYER CONSTANTS
 ##############################################################################
-FLOOR_LAYER   = "floor"    # Single tile terrain
-OBJECTS_LAYER = "objects"  # e.g. rocks, trees, bridges
-ITEMS_LAYER   = "items"    # items on the ground
-ENTITIES_LAYER= "entities" # future usage if you want to store NPCs here
+FLOOR_LAYER   = "floor"    
+OBJECTS_LAYER = "objects"  
+ITEMS_LAYER   = "items"    
+ENTITIES_LAYER= "entities" 
 
 # All "floor" type IDs => stored in the 'floor' layer
 FLOOR_TYPE_IDS = {
@@ -48,7 +49,6 @@ OBJECT_TYPE_IDS = {
     BRIDGE_ID,
     BRIDGE_END_ID,
     BRIDGE_TOOL_ID,
-    # etc. You can add more
 }
 
 # If you eventually define item IDs in scenery_defs, put them in ITEM_TYPE_IDS
@@ -58,7 +58,7 @@ ITEM_TYPE_IDS = set()
 ENTITIES_TYPE_IDS = set()
 
 ##############################################################################
-# LEGACY REGISTER FUNCTIONALITY
+# REGISTERING / GET-PLACEABLE DEFS
 ##############################################################################
 def register_scenery(definition_id, char, color_pair, blocking, placeable):
     ALL_SCENERY_DEFS[definition_id] = {
@@ -75,24 +75,6 @@ def get_placeable_scenery_defs():
         if info.get("placeable", False)
     ]
 
-##############################################################################
-# Build forward/reverse maps
-##############################################################################
-def build_forward_map():
-    forward = {}
-    for def_id, info in ALL_SCENERY_DEFS.items():
-        c = info.get("ascii_char", info.get("char", "?"))
-        cp = info.get("ascii_color", info.get("color_pair", 0))
-        forward[def_id] = (c, cp)
-    return forward
-
-def build_reverse_map():
-    reverse = {}
-    for def_id, info in ALL_SCENERY_DEFS.items():
-        c = info.get("ascii_char", info.get("char", "?"))
-        cp = info.get("ascii_color", info.get("color_pair", 0))
-        reverse[(c, cp)] = def_id
-    return reverse
 
 ##############################################################################
 # SCENERYOBJECT
@@ -108,8 +90,8 @@ class SceneryObject:
         self.char = "?"
         self.color_pair = 0
 
+        # Use static caching to avoid rebuilding maps repeatedly.
         if not hasattr(self.__class__, "_forward_cache"):
-            from scenery_main import build_forward_map, build_reverse_map
             self.__class__._forward_cache = build_forward_map()
             self.__class__._reverse_cache = build_reverse_map()
 
@@ -117,25 +99,84 @@ class SceneryObject:
         reverse_map = self.__class__._reverse_cache
 
         if paramB is None:
+            # paramA = def_id
             def_id = paramA
             self.definition_id = def_id
             char_col = forward_map.get(def_id, ("?", 0))
             self.char = char_col[0]
             self.color_pair = char_col[1]
         else:
+            # paramA = char, paramB = color
             c = paramA
             col = paramB
             self.char = c
             self.color_pair = col
             self.definition_id = reverse_map.get((c, col), None)
 
+
 ##############################################################################
-# 1) LAYER-BASED DICTIONARY
+# LAYER-BASED DICTIONARY & HELPER FUNCTIONS
 ##############################################################################
+
+def ensure_layered_format(placed_scenery):
+    """
+    Ensures that placed_scenery[(x,y)] is a dictionary with keys:
+      'floor', 'objects', 'items', 'entities', '_prev_floor'
+    rather than just a list of SceneryObjects or None.
+
+    Converts old-style data into the new layered structure in-place.
+    """
+    if not placed_scenery:
+        return placed_scenery  # Nothing to convert
+
+    # Peek at one tile to see if it's already a dict with 'floor' etc.
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        # It's already in layered form
+        return placed_scenery
+
+    # Otherwise, convert from list-of-objects => layered dict
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER: None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER: [],
+            ENTITIES_LAYER: [],
+            '_prev_floor': None
+        }
+        for obj in obj_list:
+            layer_name = layer_for_def_id(obj.definition_id)
+            if layer_name == FLOOR_LAYER:
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[layer_name].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+def layer_for_def_id(def_id):
+    """
+    Decide which layer to place a definition_id into.
+    If unknown, default to 'objects' so it remains visible.
+    """
+    if def_id in FLOOR_TYPE_IDS:
+        return FLOOR_LAYER
+    elif def_id in OBJECT_TYPE_IDS:
+        return OBJECTS_LAYER
+    elif def_id in ITEM_TYPE_IDS:
+        return ITEMS_LAYER
+    elif def_id in ENTITIES_TYPE_IDS:
+        return ENTITIES_LAYER
+    else:
+        return OBJECTS_LAYER
+
 def _init_tile_layers(placed_scenery, x, y):
     """
-    Ensures placed_scenery[(x,y)] has a dict with keys:
-      'floor', 'objects', 'items', 'entities', '_prev_floor'
+    Ensures placed_scenery[(x,y)] has the full dict. 
+    (Helper for append_scenery/remove_scenery/etc.)
     """
     if (x,y) not in placed_scenery:
         placed_scenery[(x,y)] = {
@@ -158,23 +199,8 @@ def _init_tile_layers(placed_scenery, x, y):
         if '_prev_floor' not in tile_layers:
             tile_layers['_prev_floor'] = None
 
-def _layer_for_def_id(def_id):
-    """
-    Decide which layer to place a definition_id into.
-    If unknown, we default to 'objects' so it remains visible.
-    """
-    if def_id in FLOOR_TYPE_IDS:
-        return FLOOR_LAYER
-    elif def_id in OBJECT_TYPE_IDS:
-        return OBJECTS_LAYER
-    elif def_id in ITEM_TYPE_IDS:
-        return ITEMS_LAYER
-    elif def_id in ENTITIES_TYPE_IDS:
-        return ENTITIES_LAYER
-    else:
-        return OBJECTS_LAYER
 
-def _append_scenery(placed_scenery, obj):
+def append_scenery(placed_scenery, obj):
     """
     Places 'obj' into the correct layer at (obj.x, obj.y).
     - If floor => overwrites the old floor (storing it in '_prev_floor')
@@ -187,7 +213,7 @@ def _append_scenery(placed_scenery, obj):
     _init_tile_layers(placed_scenery, x, y)
 
     tile_layers = placed_scenery[(x,y)]
-    layer_name = _layer_for_def_id(obj.definition_id)
+    layer_name = layer_for_def_id(obj.definition_id)
 
     if layer_name == FLOOR_LAYER:
         if tile_layers[FLOOR_LAYER] and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id:
@@ -195,11 +221,11 @@ def _append_scenery(placed_scenery, obj):
         tile_layers[FLOOR_LAYER] = obj
     else:
         if tile_layers[FLOOR_LAYER] is None:
-            from scenery_main import SceneryObject, EMPTY_FLOOR_ID
             tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
         tile_layers[layer_name].append(obj)
 
-def _remove_scenery(placed_scenery, obj):
+
+def remove_scenery(placed_scenery, obj):
     """
     Removes 'obj' from whichever layer it belongs to.
     If removing a floor object:
@@ -212,11 +238,10 @@ def _remove_scenery(placed_scenery, obj):
         return
 
     tile_layers = placed_scenery[(x,y)]
-    # Ensure _prev_floor is set (avoid KeyError if tile data was not fully init):
     if '_prev_floor' not in tile_layers:
         tile_layers['_prev_floor'] = None
 
-    layer_name = _layer_for_def_id(obj.definition_id)
+    layer_name = layer_for_def_id(obj.definition_id)
 
     if layer_name == FLOOR_LAYER:
         if tile_layers[FLOOR_LAYER] == obj:
@@ -243,7 +268,8 @@ def _remove_scenery(placed_scenery, obj):
         tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
         tile_layers['_prev_floor'] = None
 
-def _get_objects_at(placed_scenery, x, y):
+
+def get_objects_at(placed_scenery, x, y):
     """
     Merges floor + objects + items + entities into a single list from bottom -> top.
     floor (if any) -> objects -> items -> entities
@@ -263,7 +289,7 @@ def _get_objects_at(placed_scenery, x, y):
 # COLLISION & LOOKUP LOGIC
 ##############################################################################
 def is_blocked(x, y, placed_scenery):
-    merged_stack = _get_objects_at(placed_scenery, x, y)
+    merged_stack = get_objects_at(placed_scenery, x, y)
     if not merged_stack:
         return False
     top_obj = merged_stack[-1]
@@ -271,10 +297,10 @@ def is_blocked(x, y, placed_scenery):
     return (info and info.get("blocking", False))
 
 def get_stacked_objs(x, y, placed_scenery):
-    return _get_objects_at(placed_scenery, x, y)
+    return get_objects_at(placed_scenery, x, y)
 
 def get_topmost_obj(x, y, placed_scenery):
-    merged_stack = _get_objects_at(placed_scenery, x, y)
+    merged_stack = get_objects_at(placed_scenery, x, y)
     return merged_stack[-1] if merged_stack else None
 
 def get_scenery_def_id_at(x, y, placed_scenery):
@@ -306,8 +332,9 @@ def place_scenery_item(def_id, player, placed_scenery, mark_dirty_func,
         if top_obj:
             newly_placed.append(top_obj)
     else:
-        obj = _place_single_tile(player.x, player.y, def_id,
-                                 placed_scenery, mark_dirty_func)
+        obj = SceneryObject(player.x, player.y, def_id)
+        append_scenery(placed_scenery, obj)
+        mark_dirty_func(player.x, player.y)
         newly_placed.append(obj)
 
     return newly_placed
@@ -315,13 +342,13 @@ def place_scenery_item(def_id, player, placed_scenery, mark_dirty_func,
 def place_tree(player, placed_scenery, mark_dirty_func):
     px, py = player.x, player.y
     trunk_obj = SceneryObject(px, py, TREE_TRUNK_ID)
-    _append_scenery(placed_scenery, trunk_obj)
+    append_scenery(placed_scenery, trunk_obj)
     mark_dirty_func(px, py)
 
     top_obj = None
     if py > 0:
         top_obj = SceneryObject(px, py - 1, TREE_TOP_ID)
-        _append_scenery(placed_scenery, top_obj)
+        append_scenery(placed_scenery, top_obj)
         mark_dirty_func(px, py - 1)
 
     return trunk_obj, top_obj
@@ -344,7 +371,7 @@ def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
 
     water_tiles = []
     while 0 <= cx < world_width and 0 <= cy < world_height:
-        tile_objs = _get_objects_at(placed_scenery, cx, cy)
+        tile_objs = get_objects_at(placed_scenery, cx, cy)
         found_river = None
         for obj in tile_objs:
             if obj.definition_id == RIVER_ID:
@@ -363,13 +390,13 @@ def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
     for wobj in water_tiles:
         # Keep the river as the floor, do NOT remove it.
         # Remove any existing BridgeEnd in that same tile.
-        tile_objs2 = _get_objects_at(placed_scenery, wobj.x, wobj.y)
+        tile_objs2 = get_objects_at(placed_scenery, wobj.x, wobj.y)
         endpoints = [o for o in tile_objs2 if o.definition_id == BRIDGE_END_ID]
         for e in endpoints:
-            _remove_scenery(placed_scenery, e)
+            remove_scenery(placed_scenery, e)
 
         new_bridge = SceneryObject(wobj.x, wobj.y, BRIDGE_ID)
-        _append_scenery(placed_scenery, new_bridge)
+        append_scenery(placed_scenery, new_bridge)
         mark_dirty_func(wobj.x, wobj.y)
         newly_placed.append(new_bridge)
 
@@ -379,22 +406,16 @@ def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
     end_y   = water_tiles[-1].y + dy
     for (ex, ey) in [(start_x, start_y), (end_x, end_y)]:
         if 0 <= ex < world_width and 0 <= ey < world_height:
-            tile_objs3 = _get_objects_at(placed_scenery, ex, ey)
+            tile_objs3 = get_objects_at(placed_scenery, ex, ey)
             has_bridge = any(o.definition_id == BRIDGE_ID for o in tile_objs3)
             is_river   = any(o.definition_id == RIVER_ID  for o in tile_objs3)
             if not has_bridge and not is_river:
                 bend = SceneryObject(ex, ey, BRIDGE_END_ID)
-                _append_scenery(placed_scenery, bend)
+                append_scenery(placed_scenery, bend)
                 mark_dirty_func(ex, ey)
                 newly_placed.append(bend)
 
     return newly_placed
-
-def _place_single_tile(x, y, def_id, placed_scenery, mark_dirty_func):
-    obj = SceneryObject(x, y, def_id)
-    _append_scenery(placed_scenery, obj)
-    mark_dirty_func(x, y)
-    return obj
 
 ##############################################################################
 # TILE EFFECT LOGIC
@@ -405,31 +426,3 @@ def apply_tile_effects(player, tile_def_id, placed_scenery,
         old_x, old_y = player.x, player.y
         player.move(player.last_move_direction, world_width, world_height, placed_scenery)
         # stops sliding if blocked
-
-##############################################################################
-# EXPORTS
-##############################################################################
-__all__ = [
-    "ALL_SCENERY_DEFS",
-    "SceneryObject",
-    "FLOOR_TYPE_IDS", "OBJECT_TYPE_IDS", "ITEM_TYPE_IDS", "ENTITIES_TYPE_IDS",
-    "FLOOR_LAYER", "OBJECTS_LAYER", "ITEMS_LAYER", "ENTITIES_LAYER",
-
-    "build_forward_map",
-    "build_reverse_map",
-    "_append_scenery",
-    "_remove_scenery",
-    "_get_objects_at",
-
-    "place_scenery_item",
-    "apply_tile_effects",
-    "place_tree",
-    "place_bridge_across_river",
-    "is_blocked",
-    "get_stacked_objs",
-    "get_topmost_obj",
-    "get_scenery_def_id_at",
-    "get_scenery_color_at",
-    "register_scenery",
-    "get_placeable_scenery_defs",
-]

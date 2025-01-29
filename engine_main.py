@@ -1,5 +1,5 @@
 # FileName: engine_main.py
-# version: 2.11
+# version: 2.12 (moved ensure_layered_format into scenery_main)
 # Summary: Core game loop integrating updates (NPCs, respawns, network) and rendering each frame.
 # Tags: engine, main, loop
 
@@ -7,9 +7,7 @@ import curses
 
 from engine_camera import (
     update_camera_with_deadzone,
-    center_camera_on_player,
-    partial_scroll_vertical,
-    partial_scroll_horizontal
+    partial_scroll
 )
 from engine_render import (
     draw_layers,
@@ -22,8 +20,7 @@ from scenery_main import (
     get_placeable_scenery_defs,
     apply_tile_effects,
     get_scenery_def_id_at,
-    # Below imports are needed for our layering fix:
-    _layer_for_def_id,
+    ensure_layered_format,   # newly imported from scenery_main
     FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 )
 from model_main import GameModel
@@ -38,7 +35,6 @@ from engine_npc import update_npcs
 from engine_network import handle_network
 from engine_transition import handle_transitions
 from engine_framerate import manage_framerate
-
 
 class GameContext:
     def __init__(self, mode_name="play"):
@@ -60,48 +56,6 @@ class GameContext:
             self.enable_editor_commands = False
             self.enable_sliding = True
             self.enable_respawn = True
-
-
-def _ensure_layered_scenery_format(placed_scenery):
-    """
-    Ensures that placed_scenery[(x,y)] is a dictionary with keys:
-      'floor', 'objects', 'items', 'entities'
-    rather than just a list of SceneryObjects.
-    
-    If it finds a dictionary (with 'floor' etc.) at (x,y), we assume it's
-    already in the new layered format. Otherwise, we convert the old
-    list-of-objects format to the layered structure.
-    """
-    if not placed_scenery:
-        return placed_scenery  # Nothing to convert
-
-    # Peek at one tile to see if it's already a dict
-    first_key = next(iter(placed_scenery))
-    first_val = placed_scenery[first_key]
-
-    # If it's already { 'floor': ..., 'objects': [...], ... }, do nothing
-    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
-        return placed_scenery
-
-    # Otherwise, convert each tile's list-of-objects into a layered dict
-    new_dict = {}
-    for (x, y), obj_list in placed_scenery.items():
-        tile_dict = {
-            FLOOR_LAYER: None,
-            OBJECTS_LAYER: [],
-            ITEMS_LAYER: [],
-            ENTITIES_LAYER: []
-        }
-        for obj in obj_list:
-            layer_name = _layer_for_def_id(obj.definition_id)
-            if layer_name == FLOOR_LAYER:
-                # Overwrite any previous floor
-                tile_dict[FLOOR_LAYER] = obj
-            else:
-                tile_dict[layer_name].append(obj)
-        new_dict[(x, y)] = tile_dict
-
-    return new_dict
 
 
 def run_engine(stdscr,
@@ -128,18 +82,17 @@ def run_engine(stdscr,
     # Store the loaded filename in the model
     model.loaded_map_filename = loaded_map_filename
 
-    # Convert 'placed_scenery' into a dict-of-lists if needed
+    # Convert old or list-based placed_scenery into layered format
     if isinstance(placed_scenery, dict):
-        model.placed_scenery = placed_scenery
+        # Possibly convert from old style -> layered
+        model.placed_scenery = ensure_layered_format(placed_scenery)
     else:
+        # If it's just a list, build a dict-of-lists first
         dict_scenery = {}
         for obj in placed_scenery:
             if hasattr(obj, 'x') and hasattr(obj, 'y'):
                 dict_scenery.setdefault((obj.x, obj.y), []).append(obj)
-        model.placed_scenery = dict_scenery
-
-    # Now ensure it's in the layered (floor/objects/items/entities) format
-    model.placed_scenery = _ensure_layered_scenery_format(model.placed_scenery)
+        model.placed_scenery = ensure_layered_format(dict_scenery)
 
     # Optionally store the respawn list
     if respawn_list:
@@ -155,6 +108,7 @@ def run_engine(stdscr,
     stdscr.timeout(0)
 
     # Center camera
+    from engine_camera import center_camera_on_player
     center_camera_on_player(model, stdscr, map_top_offset)
 
     def full_redraw(stdscr):
@@ -216,13 +170,13 @@ def run_engine(stdscr,
         dx = model.camera_x - old_cam_x
         dy = model.camera_y - old_cam_y
 
+        # If big jump, do full redraw
         if abs(dx) > 1 or abs(dy) > 1:
             model.full_redraw_needed = True
         else:
-            if dy in (1, -1):
-                partial_scroll_vertical(model, stdscr, dy, map_top_offset)
-            if dx in (1, -1):
-                partial_scroll_horizontal(model, stdscr, dx, map_top_offset)
+            # partial scroll for dx or dy = ±1
+            if dx != 0 or dy != 0:
+                partial_scroll(model, stdscr, dx, dy, map_top_offset)
 
         if key != -1:
             did_move, should_quit = handle_common_keys(key, model, stdscr, lambda x, y: mark_dirty(model, x, y))

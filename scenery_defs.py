@@ -35,7 +35,7 @@ ALL_SCENERY_DEFS = {
     },
     TREE_TOP_ID: {
         "ascii_char": "§",
-        "ascii_color": 1,  # "green_on_black" => top of the tree is green font on black background
+        "ascii_color": 1,  # "green_on_black"
         "blocking": False,
         "placeable": False,
         "tile_image": "assets/tiles/tree_top.png",
@@ -122,6 +122,7 @@ ALL_SCENERY_DEFS = {
 #############################
 # BUILD FORWARD/REVERSE MAPS
 #############################
+
 def build_forward_map():
     """
     definition_id -> (char, color_pair)
