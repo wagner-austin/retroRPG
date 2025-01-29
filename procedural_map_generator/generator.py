@@ -1,10 +1,9 @@
 # FileName: generator.py
-# version: 2.0
+# version: 2.1
 # Summary: Coordinates the procedural generation workflow, calling sub-generators (rivers, grass, etc.) in order.
 # Tags: map, generation, pipeline
 
 import random
-from collections import deque  # for BFS queue
 
 # Import sub-generators from their respective modules
 from .gen_rivers import spawn_rivers
@@ -18,7 +17,7 @@ from .gen_grass import (
 # from .gen_trees import spawn_trees_non_grass
 # from .gen_bridges import connect_grass_regions_with_bridges
 
-# Import the ID constants and the forward/reverse maps from scenery_defs
+# Import the ID constants and forward/reverse maps from scenery_defs
 from scenery_defs import (
     RIVER_ID,
     GRASS_ID,
@@ -32,6 +31,9 @@ from scenery_defs import (
 # We import the entire debug module
 import debug
 
+# Import BFS helpers from utils
+from .utils import compute_distance_map_bfs
+
 # Build caches for converting (char, color) <-> definition_id
 FORWARD_MAP = build_forward_map()
 REVERSE_MAP = build_reverse_map()
@@ -44,12 +46,14 @@ def tile_to_definition_id(ch, cpair):
     """
     return REVERSE_MAP.get((ch, cpair), EMPTY_FLOOR_ID)
 
+
 def definition_id_to_tile(def_id):
     """
     Convert a definition_id into (char, color_pair) using FORWARD_MAP (from scenery_defs).
     Fallback to ('.', 17) if unknown, just for safety.
     """
     return FORWARD_MAP.get(def_id, ('.', 17))
+
 
 def generate_procedural_map(width=100, height=100):
     """
@@ -69,10 +73,10 @@ def generate_procedural_map(width=100, height=100):
     # 1) Initialize a 2D grid of None => blank
     grid = [[None for _ in range(width)] for _ in range(height)]
 
-    # 2) Rivers => sets some tiles to (' ', 4)
+    # 2) Rivers => sets some tiles to (' ', 4) => "RIVER_ID"
     spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2)
 
-    # 3) Create large grass patches => (' ', 5)
+    # 3) Create large grass patches => (' ', 5) => "GRASS_ID"
     spawn_large_semicircle_grass(
         grid,
         width,
@@ -81,43 +85,35 @@ def generate_procedural_map(width=100, height=100):
         patch_size=60
     )
 
-    # BFS data
-    distance_map = [[99999]*width for _ in range(height)]
-    queue = deque()
-
-    # Identify grass => BFS starting points
+    # Identify grass tiles => BFS starting points
+    grass_starts = []
     for y in range(height):
         for x in range(width):
             if grid[y][x] is not None:
                 ch, cpair = grid[y][x]
                 def_id = tile_to_definition_id(ch, cpair)
                 if def_id == GRASS_ID:
-                    distance_map[y][x] = 0
-                    queue.append((x, y))
+                    grass_starts.append((x, y))
 
-    # Multi-source BFS outward from grass
-    while queue:
-        cx, cy = queue.popleft()
-        current_dist = distance_map[cy][cx]
-        for nx, ny in [(cx+1,cy), (cx-1,cy), (cx,cy+1), (cx,cy-1)]:
-            if 0 <= nx < width and 0 <= ny < height:
-                if distance_map[ny][nx] > current_dist + 1:
-                    distance_map[ny][nx] = current_dist + 1
-                    queue.append((nx, ny))
+    # 4) Use our BFS helper for multi-source BFS to fill blank areas
+    def passable_func(x, y):
+        # For the fill BFS, we don't block anything
+        return True
 
-    # Fill blank tiles with SEMICOLON_FLOOR or EMPTY_FLOOR
+    distance_map = compute_distance_map_bfs(width, height, grass_starts, passable_func)
+
+    # Fill blank tiles
     for y in range(height):
         for x in range(width):
             if grid[y][x] is None:
                 dist = distance_map[y][x]
+                # near grass => semicolon floor
                 if dist <= 5:
-                    # near grass => semicolon
                     grid[y][x] = definition_id_to_tile(SEMICOLON_FLOOR_ID)
                 else:
-                    # far from grass => empty
                     grid[y][x] = definition_id_to_tile(EMPTY_FLOOR_ID)
 
-    # If debug enabled => transform empty floors to debug dots
+    # If debug => transform empty floors to debug dots
     if debug.DEBUG_CONFIG["enabled"]:
         for y in range(height):
             for x in range(width):

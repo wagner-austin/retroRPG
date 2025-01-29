@@ -1,5 +1,7 @@
-# gen_rivers.py
-# Handles river spawning, from choosing edge points to thickening the water path.
+# FileName: gen_rivers.py
+# version: 1.0
+# Summary: Handles river spawning, from choosing edge points to thickening the water path.
+# Tags: map, generation, rivers
 
 import random
 
@@ -16,14 +18,12 @@ def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
         path = trace_river_path_improved(start, end, width, height)
         fill_river_alternate_widths(grid, path, width, height)
 
+
 def pick_opposite_edges(width, height):
     """
     Pick one edge of the map at random (top, bottom, left, right),
-    then pick the opposite edge, and return (start, end) positions.
-    For instance, if we pick "top," the opposite is "bottom."
+    then pick the opposite edge, returning (start, end) positions.
     """
-    # 0 = top->bottom, 1 = bottom->top,
-    # 2 = left->right, 3 = right->left
     edge_type = random.randint(0, 3)
 
     if edge_type == 0:
@@ -53,6 +53,7 @@ def pick_opposite_edges(width, height):
 
     return (sx, sy), (ex, ey)
 
+
 def trace_river_path_improved(start, end, width, height):
     """
     Generates a path from start->end with segments that may be:
@@ -66,7 +67,7 @@ def trace_river_path_improved(start, end, width, height):
     curx, cury = sx, sy
     path.append((curx, cury))
 
-    # A loose bound to prevent infinite loops
+    import math
     max_steps = (abs(ex - sx) + abs(ey - sy)) * 3
 
     for _ in range(max_steps):
@@ -76,69 +77,62 @@ def trace_river_path_improved(start, end, width, height):
         dx = ex - curx
         dy = ey - cury
 
-        # If we're very close to the end, just jump there
+        # if close to end, just jump there
         if abs(dx) <= 1 and abs(dy) <= 1:
             curx, cury = ex, ey
             path.append((curx, cury))
             break
 
-        # Decide randomly whether to do a diagonal pattern or a straight move
-        # (e.g. 30% chance to attempt a diagonal movement, otherwise straight).
+        # 30% chance to do a diagonal pattern
         do_diagonal = (random.random() < 0.3 and dx != 0 and dy != 0)
 
         if do_diagonal:
-            # "over-over-down" or "down-over-over"
-            # Convert dx, dy to -1, 0, or 1 sign
             sxn = 1 if dx > 0 else -1
             syn = 1 if dy > 0 else -1
-
-            # Randomly choose which pattern to do
             pattern_type = random.choice([0, 1])
             if pattern_type == 0:
-                # over, over, down
                 steps = [(sxn, 0), (sxn, 0), (0, syn)]
             else:
-                # down, over, over
                 steps = [(0, syn), (sxn, 0), (sxn, 0)]
         else:
-            # Straight movement (horizontal or vertical).
-            # Decide horizontal vs vertical by whichever is larger in magnitude.
+            # straight movement
             if abs(dx) > abs(dy):
-                # Move horizontally up to 2 steps
                 sxn = 1 if dx > 0 else -1
                 steps = [(sxn, 0)] * random.randint(1, 2)
             else:
-                # Move vertically up to 2 steps
                 syn = 1 if dy > 0 else -1
                 steps = [(0, syn)] * random.randint(1, 2)
 
-        # Apply the steps in the chosen pattern
+        # apply steps
         for (mx, my) in steps:
             if (curx, cury) == (ex, ey):
                 break
             curx += mx
             cury += my
-            # Clamp
-            curx = max(0, min(curx, width - 1))
-            cury = max(0, min(cury, height - 1))
+            if curx < 0:
+                curx = 0
+            elif curx >= width:
+                curx = width - 1
+            if cury < 0:
+                cury = 0
+            elif cury >= height:
+                cury = height - 1
             path.append((curx, cury))
             if (curx, cury) == (ex, ey):
                 break
 
-    # Ensure the end is in the path
     if (curx, cury) != (ex, ey):
         path.append((ex, ey))
 
     return path
 
+
 def fill_river_alternate_widths(grid, path, width, height):
     """
     For each index i in the path, if i is even => fill the tile + an extra
-    'radius' around it (3-wide).
-    If i is odd => fill just the center tile (1-wide).
+    radius around it (3-wide). If i is odd => fill just the center tile (1-wide).
     We use water = (' ', 4).
     """
-    # Offsets for "3-wide": center + the 8 neighbors
     wide_offsets = [
         (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1),
         (1, 1), (1, -1), (-1, 1), (-1, -1)
@@ -151,8 +145,7 @@ def fill_river_alternate_widths(grid, path, width, height):
                 nx = x + ox
                 ny = y + oy
                 if 0 <= nx < width and 0 <= ny < height:
-                    grid[ny][nx] = (' ', 4)  # water
+                    grid[ny][nx] = (' ', 4)
         else:
             # 1-wide
             grid[y][x] = (' ', 4)
-

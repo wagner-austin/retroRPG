@@ -1,5 +1,5 @@
 # FileName: color_init.py
-# version: 3.2 (modified to unify extended color logic)
+# version: 3.3
 # Summary: Initializes curses color pairs. Skips invalid indexes if terminal supports fewer colors.
 # Tags: colors, curses, setup
 
@@ -22,7 +22,6 @@ BASE_COLORS = {
 }
 
 # Extended color indexes for e.g. light_gray, dark_gray, etc.
-# Only works if curses.can_change_color() == True on your terminal.
 EXTENDED_COLORS = {
     "light_gray": 8,
     "dark_gray":  9,
@@ -42,9 +41,6 @@ def define_extended_colors():
     # dark_gray  => ~30% white
     curses.init_color(9, 300, 300, 300)
 
-#
-# MAIN color_init LOGIC
-#
 
 color_pairs = {}
 
@@ -71,18 +67,18 @@ def init_colors():
 
     # Create alias names for legacy references
     ALIAS_MAP = {
-        "UI_YELLOW":    "yellow_on_black",
-        "WHITE_TEXT":   "white_on_black",
-        "UI_CYAN":      "cyan_on_black",
-        "UI_MAGENTA":   "magenta_on_black",
-        "UI_WHITE_ON_BLUE": "white_on_blue",
-        "YELLOW_TEXT":  "yellow_on_black",
-        "ASCII_ART":    "white_on_black",
-        "TREE_TOP":     "green_on_black",
-        "ROCK":         "white_on_black",
-        "RIVER":        "white_on_blue",
-        "GRASS":        "white_on_green",
-        "PATH":         "black_on_yellow",
+        # Removed "UI_YELLOW": "yellow_on_black" to avoid duplication with "YELLOW_TEXT"
+        "WHITE_TEXT":        "white_on_black",
+        "UI_CYAN":           "cyan_on_black",
+        "UI_MAGENTA":        "magenta_on_black",
+        "UI_WHITE_ON_BLUE":  "white_on_blue",
+        "YELLOW_TEXT":       "yellow_on_black",
+        "ASCII_ART":         "white_on_black",
+        "TREE_TOP":          "green_on_black",
+        "ROCK":              "white_on_black",
+        "RIVER":             "white_on_blue",
+        "GRASS":             "white_on_green",
+        "PATH":              "black_on_yellow",
         # Add more if needed
     }
 

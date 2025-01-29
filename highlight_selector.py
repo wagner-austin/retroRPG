@@ -1,17 +1,15 @@
 # FileName: highlight_selector.py
-# version: 1.3 (Now uses separate selected_color_name vs. unselected_color_name)
+# version: 1.4
 # Summary: Provides a single, globally configurable highlight/selector system.
 # Tags: selector, highlight, effects
 
 import curses
 from color_init import color_pairs
+from curses_utils import safe_addstr, get_color_attr
 
-# -------------------------------------------------------------------
-# 1) GLOBAL HIGHLIGHT CONFIG
-# -------------------------------------------------------------------
 GLOBAL_HIGHLIGHT_CONFIG = {
-    "selected_color_name":   "UI_YELLOW",   # old name, mapped to "yellow_on_black"
-    "unselected_color_name": "WHITE_TEXT",  # old name, mapped to "white_on_black"
+    "selected_color_name":   "YELLOW_TEXT",   # was "UI_YELLOW", unified
+    "unselected_color_name": "WHITE_TEXT",
     "effect_name":           "REVERSE_BLINK",
     "speed_factor":          5,
 }
@@ -19,7 +17,9 @@ GLOBAL_HIGHLIGHT_CONFIG = {
 def get_global_selector_config():
     return GLOBAL_HIGHLIGHT_CONFIG
 
-def get_selector_effect_attrs(effect="REVERSE_BLINK", frame=0, speed_factor=10):
+def get_selector_effect_attrs(effect="REVERSE_BLINK",
+                              frame=0,
+                              speed_factor=10) -> int:
     toggle_state = (frame // speed_factor) % 2
     if effect == "NONE":
         return curses.A_NORMAL
@@ -37,24 +37,19 @@ def get_selector_effect_attrs(effect="REVERSE_BLINK", frame=0, speed_factor=10):
         return (curses.A_BOLD | curses.A_BLINK) if toggle_state == 0 else curses.A_NORMAL
     return curses.A_REVERSE  # fallback
 
-def draw_global_selector_line(stdscr, row, text, is_selected=False, frame=0):
+def draw_global_selector_line(stdscr, row: int, text: str,
+                              is_selected: bool=False,
+                              frame: int=0) -> None:
     config = get_global_selector_config()
     selected_color_name   = config["selected_color_name"]
     unselected_color_name = config["unselected_color_name"]
     effect_name           = config["effect_name"]
     speed_factor          = config["speed_factor"]
 
-    _, w = stdscr.getmaxyx()
-    truncated = text[: w - 4]
+    if is_selected:
+        attrs = get_selector_effect_attrs(effect=effect_name, frame=frame, speed_factor=speed_factor)
+        color_attr = get_color_attr(selected_color_name) | attrs
+    else:
+        color_attr = get_color_attr(unselected_color_name)
 
-    try:
-        if is_selected:
-            attrs = get_selector_effect_attrs(effect=effect_name,
-                                              frame=frame,
-                                              speed_factor=speed_factor)
-            color = curses.color_pair(color_pairs[selected_color_name]) | attrs
-        else:
-            color = curses.color_pair(color_pairs[unselected_color_name])
-        stdscr.addstr(row, 2, truncated, color)
-    except curses.error:
-        pass
+    safe_addstr(stdscr, row, 2, text, color_attr)

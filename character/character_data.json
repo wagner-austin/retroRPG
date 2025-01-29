@@ -2,11 +2,11 @@
   "name": "Hero",
   "hp": 100,
   "level": 1,
-  "x": 54,
+  "x": 50,
   "y": 50,
   "gold": 0,
   "wood": 6,
-  "stone": 62,
+  "stone": 67,
   "inventory": [],
   "equipped": {
     "weapon": null,

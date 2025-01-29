@@ -1,7 +1,7 @@
 # FileName: map_io_ui.py
-# version: 2.7
-# Summary: Contains curses-based UI routines (map list, save prompts, load prompts).
-#          Now does no text on overwrite, just a 500ms nap if `notify_overwrite=True`.
+# version: 2.9
+# Summary: Contains curses-based UI routines (map list, save prompts, load prompts),
+#          uses safe_addstr for clip_borders.
 # Tags: map, ui, io
 
 import curses
@@ -16,6 +16,7 @@ from ui_main import (
 )
 from art_main import CROCODILE
 from highlight_selector import draw_global_selector_line
+from curses_utils import safe_addstr, safe_addch, get_color_attr
 
 
 def draw_load_map_screen(stdscr):
@@ -25,12 +26,12 @@ def draw_load_map_screen(stdscr):
     curses.curs_set(0)
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Load Map", row=1)
-    draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
+    draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
     instructions = [
         "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_MAGENTA")
 
 
 def draw_save_map_screen(stdscr):
@@ -40,12 +41,12 @@ def draw_save_map_screen(stdscr):
     curses.curs_set(0)
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Save Map", row=1)
-    draw_art(stdscr, CROCODILE, start_row=3, start_col=2, color_name="ASCII_ART")
+    draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
     instructions = [
         "Select a map to overwrite, 'n'=new, 'ENTER'=cancel, 'v'=toggle debug"
     ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_YELLOW")
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_MAGENTA")
 
 
 def prompt_for_filename(stdscr, prompt):
@@ -55,7 +56,9 @@ def prompt_for_filename(stdscr, prompt):
     row = 10
     if row < max_h - 1:
         stdscr.refresh()
-        stdscr.addstr(row, 2, prompt, curses.color_pair(color_pairs["UI_CYAN"]))
+        attr = get_color_attr("UI_CYAN")
+        # Use clip_borders=True so we never cross the border
+        safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
         stdscr.refresh()
         curses.echo()
         filename_bytes = stdscr.getstr(row, 2 + len(prompt) + 1, 20)
@@ -133,6 +136,10 @@ def display_map_list(stdscr):
         frame_count += 1
 
 
+def _draw_global_text(stdscr, row, text, attr):
+    safe_addstr(stdscr, row, 2, text, attr, clip_borders=True)
+
+
 def display_map_list_for_save(stdscr):
     init_colors()
     maps_dir = "maps"
@@ -150,10 +157,12 @@ def display_map_list_for_save(stdscr):
         if files:
             stdscr.refresh()
             try:
-                stdscr.addstr(
-                    row, 2,
+                attr_cyan = get_color_attr("UI_CYAN")
+                _draw_global_text(
+                    stdscr,
+                    row,
                     "Maps (pick number to overwrite) or 'n' for new, 'v' toggles debug:",
-                    curses.color_pair(color_pairs["UI_CYAN"])
+                    attr_cyan
                 )
             except:
                 pass
@@ -162,26 +171,31 @@ def display_map_list_for_save(stdscr):
                 if row >= max_h - 1:
                     break
                 try:
-                    stdscr.addstr(row, 2, f"{i}. {filename}",
-                                  curses.color_pair(color_pairs["UI_YELLOW"]))
+                    attr_yellow = get_color_attr("YELLOW_TEXT")
+                    _draw_global_text(stdscr, row, f"{i}. {filename}", attr_yellow)
                 except:
                     pass
                 row += 1
             if row < max_h - 1:
                 try:
-                    stdscr.addstr(row, 2,
-                                  "Enter choice or press Enter to cancel:",
-                                  curses.color_pair(color_pairs["UI_CYAN"]))
+                    _draw_global_text(
+                        stdscr,
+                        row,
+                        "Enter choice or press Enter to cancel:",
+                        attr_cyan
+                    )
                 except:
                     pass
                 row += 1
         else:
             stdscr.refresh()
             try:
-                stdscr.addstr(
-                    row, 2,
+                attr_cyan = get_color_attr("UI_CYAN")
+                _draw_global_text(
+                    stdscr,
+                    row,
                     "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
-                    curses.color_pair(color_pairs["UI_CYAN"])
+                    attr_cyan
                 )
             except:
                 pass
@@ -235,10 +249,6 @@ def save_map_ui(stdscr, placed_scenery, player=None,
                 world_width=100, world_height=100,
                 filename_override=None,
                 notify_overwrite=False):
-    """
-    notify_overwrite=True => if a file is being overwritten, do a 500ms nap (no text).
-    notify_overwrite=False => skip any nap or notification.
-    """
     import map_io_main
     from map_io_storage import save_map_file
 
@@ -271,17 +281,10 @@ def save_map_ui(stdscr, placed_scenery, player=None,
         world_height=world_height
     )
 
-    # Actually save the file
     save_map_file(save_path, map_data)
 
-    # if overwriting
     if file_existed and notify_overwrite:
-        # just do a 500ms nap, no text
         curses.napms(500)
-    # else no message or nap
 
 def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=None):
-    """
-    Disabled to avoid a second "save generated map?" prompt.
-    """
     return
