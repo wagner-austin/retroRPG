@@ -1,9 +1,10 @@
 # FileName: ui_main.py
-# version: 2.8
+# version: 2.9
 # Summary: Provides functions and helpers for drawing frames, labels, etc.
 # Tags: ui, rendering, curses
 
 import curses
+import debug
 from color_init import color_pairs
 from animator_draw import draw_border, draw_art
 from curses_utils import safe_addstr, get_color_attr, parse_two_color_names, safe_addch
@@ -63,18 +64,13 @@ def draw_screen_frame(stdscr: curses.window, color_name: str = BORDER_COLOR_NAME
     Draws a border around the screen, plus a "Debug mode" label if debug is enabled.
     """
     draw_border(stdscr, color_name)
-    try:
-        import debug
-        if debug.DEBUG_CONFIG["enabled"]:
-            max_h, max_w = stdscr.getmaxyx()
-            label = "Debug mode: On"
-            col = max_w - len(label) - 2
-            dbg_attr = get_color_attr("WHITE_TEXT")
-            # We'll pass clip_borders=False only if we truly want to place at col= max_w-2
-            # But we do want to be inside the border, so let's keep clip_borders=True
-            safe_addstr(stdscr, 0, col, label, dbg_attr, clip_borders=False)
-    except:
-        pass
+    if debug.DEBUG_CONFIG["enabled"]:
+        max_h, max_w = stdscr.getmaxyx()
+        label = "Debug mode: On"
+        col = max_w - len(label) - 2
+        dbg_attr = get_color_attr("WHITE_TEXT")
+        # We'll pass clip_borders=False so it can draw near the top-right.
+        safe_addstr(stdscr, 0, col, label, dbg_attr, clip_borders=False)
 
 def draw_text(stdscr: curses.window,
               row: int,

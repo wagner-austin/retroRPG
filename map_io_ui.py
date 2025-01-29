@@ -1,11 +1,12 @@
 # FileName: map_io_ui.py
-# version: 2.9
+# version: 2.10
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts),
 #          uses safe_addstr for clip_borders.
 # Tags: map, ui, io
 
 import curses
 import os
+import debug
 
 from color_init import init_colors, color_pairs
 from ui_main import (
@@ -57,7 +58,6 @@ def prompt_for_filename(stdscr, prompt):
     if row < max_h - 1:
         stdscr.refresh()
         attr = get_color_attr("UI_CYAN")
-        # Use clip_borders=True so we never cross the border
         safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
         stdscr.refresh()
         curses.echo()
@@ -123,7 +123,6 @@ def display_map_list(stdscr):
             else:
                 return ("EDIT", files[selected_index])
         elif key == ord('v'):
-            import debug
             debug.toggle_debug()
         elif ord('0') <= key <= ord('9'):
             typed = key - ord('0')
@@ -216,7 +215,6 @@ def display_map_list_for_save(stdscr):
             if selection.lower() == 'n':
                 return "NEW_FILE"
             elif selection.lower() == 'v':
-                import debug
                 debug.toggle_debug()
                 continue
             elif selection.isdigit():

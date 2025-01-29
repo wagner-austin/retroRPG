@@ -1,9 +1,10 @@
 # FileName: scene_main.py
-# version: 1.4 (Now uses the single global highlight config for the main menu)
+# version: 1.5 (Now uses the single global highlight config for the main menu)
 # Summary: High-level scene functions (title screen, load screen, etc.).
 # Tags: scene, animation, menu
 
 import curses
+import debug
 from art_main import MAIN_MENU_ART, CROCODILE
 from ui_main import (
     draw_screen_frame,
@@ -52,7 +53,7 @@ def scene_home_screen(stdscr):
         draw_title(stdscr, "Welcome to Retro RPG!", row=1)
         draw_art(stdscr, MAIN_MENU_ART, start_row=3, start_col=2 + offset_x)
 
-        # Draw menu lines near bottom with a highlight on the selected index
+        # Draw menu near the bottom
         h, w = stdscr.getmaxyx()
         from_bottom = 2
         start_row = h - from_bottom - len(menu_lines)
@@ -81,21 +82,16 @@ def scene_home_screen(stdscr):
 
         key = stdscr.getch()
         if key != -1:
-            # Move highlight with up/down
             if key in (curses.KEY_UP, ord('w'), ord('W')):
                 current_select_slot = max(0, current_select_slot - 1)
             elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
                 if current_select_slot < len(selectable_indices) - 1:
                     current_select_slot += 1
-
-            # Press Enter => confirm
             elif key in (curses.KEY_ENTER, 10, 13):
                 if current_select_slot == 0:
-                    return 1
+                    return 1  # Play
                 else:
-                    return 2
-
-            # Numeric shortcuts remain
+                    return 2  # Quit
             elif key == ord('1'):
                 return 1
             elif key == ord('2'):
@@ -105,7 +101,6 @@ def scene_home_screen(stdscr):
             elif key in (ord('q'), ord('Q'), 27):
                 return 2
             elif key == ord('v'):
-                import debug
                 debug.toggle_debug()
 
         frame_count += 1
@@ -123,7 +118,7 @@ def scene_home_screen(stdscr):
 
 def scene_load_screen(stdscr):
     """
-    Shows animated CROCODILE art for the Load Map screen 
+    Shows animated CROCODILE art for the Load Map screen
     until user presses certain keys (Enter, q, ESC, etc.).
     """
     stdscr.nodelay(True)
@@ -160,7 +155,6 @@ def scene_load_screen(stdscr):
         ):
             return None
         elif key == ord('v'):
-            import debug
             debug.toggle_debug()
 
         frame_count += 1
@@ -202,5 +196,4 @@ def scene_settings_screen(stdscr):
         if key in (ord('q'), ord('Q'), 27):
             return
         elif key == ord('v'):
-            import debug
             debug.toggle_debug()

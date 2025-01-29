@@ -1,12 +1,12 @@
 # FileName: animator_main.py
-# version: 2.1
-# Summary: Manages low-level animation updates (e.g. subtle ASCII art shifts). 
+# version: 2.2
+# Summary: Manages low-level animation updates (e.g. subtle ASCII art shifts).
 #          High-level "scene" logic has been moved to scene_main.py.
 # Tags: animation, transitions
 
 import curses
+import debug
 from animator_draw import draw_art
-
 
 def animate_art_subtle(
     stdscr,
@@ -30,7 +30,6 @@ def animate_art_subtle(
     frame_count = 0
 
     while True:
-        # You can optionally clear or let the caller draw a frame, etc.
         stdscr.erase()
 
         # If given, display some title text
@@ -51,7 +50,6 @@ def animate_art_subtle(
         if key in (ord('q'), ord('Q'), 27):
             break
         elif key == ord('v'):
-            import debug
             debug.toggle_debug()
 
         frame_count += 1
