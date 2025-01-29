@@ -1,5 +1,5 @@
 # FileName: map_io_ui.py
-# version: 2.10
+# version: 2.11
 # Summary: Contains curses-based UI routines (map list, save prompts, load prompts),
 #          uses safe_addstr for clip_borders.
 # Tags: map, ui, io
@@ -29,10 +29,11 @@ def draw_load_map_screen(stdscr):
     draw_title(stdscr, "Load Map", row=1)
     draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
+    # Instructions now white instead of magenta
     instructions = [
         "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
     ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="UI_MAGENTA")
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
 
 
 def draw_save_map_screen(stdscr):
@@ -66,6 +67,33 @@ def prompt_for_filename(stdscr, prompt):
         if filename_bytes:
             return filename_bytes.decode('utf-8', errors='ignore').strip()
     return ""
+
+
+def _draw_global_text(stdscr, row, text, attr):
+    safe_addstr(stdscr, row, 2, text, attr, clip_borders=True)
+
+
+def prompt_delete_confirmation(stdscr, filename):
+    """
+    Prompt the user: "Delete <filename>? (y/n)"
+    Return True if the user chooses 'y', otherwise False.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+    question = f"Delete '{filename}'? (y/n)"
+    attr = get_color_attr("WHITE_TEXT")
+
+    # We'll draw it on the bottom row or near it
+    row = max_h - 2
+    safe_addstr(stdscr, row, 2, " " * (max_w - 4), attr, clip_borders=False)
+    safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
+    stdscr.refresh()
+
+    while True:
+        c = stdscr.getch()
+        if c in (ord('y'), ord('Y')):
+            return True
+        elif c in (ord('n'), ord('N'), ord('q'), 27):
+            return False
 
 
 def display_map_list(stdscr):
@@ -118,25 +146,37 @@ def display_map_list(stdscr):
         elif key in (ord('q'), ord('y')):
             return ""
         elif key == ord('e'):
+            # If user typed 'e', we interpret that as edit
             if selected_index == 0:
                 return ("EDIT_GENERATE", None)
             else:
                 return ("EDIT", files[selected_index])
         elif key == ord('v'):
             debug.toggle_debug()
+        elif key == ord('d'):
+            # Delete function
+            if selected_index > 0:  # index 0 is "Generate a new map>", cannot be deleted
+                to_delete = files[selected_index]
+                confirm = prompt_delete_confirmation(stdscr, to_delete)
+                if confirm:
+                    try:
+                        os.remove(os.path.join(maps_dir, to_delete))
+                    except OSError:
+                        pass
+                    # remove from list
+                    del files[selected_index]
+                    if selected_index >= len(files):
+                        selected_index = len(files) - 1
         elif ord('0') <= key <= ord('9'):
             typed = key - ord('0')
             if 0 <= typed < len(files):
                 selected_index = typed
 
         if len(files) == 1:
+            # If only one entry, it's "Generate a new map>", so keep selected_index=0
             selected_index = 0
 
         frame_count += 1
-
-
-def _draw_global_text(stdscr, row, text, attr):
-    safe_addstr(stdscr, row, 2, text, attr, clip_borders=True)
 
 
 def display_map_list_for_save(stdscr):
