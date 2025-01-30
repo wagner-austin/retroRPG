@@ -11,7 +11,7 @@ from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, get_color_attr
 
 GLOBAL_HIGHLIGHT_CONFIG = {
-    "selected_color_name":   "YELLOW_TEXT",      # was "UI_YELLOW", unified
+    "selected_color_name":   "YELLOW_TEXT",
     "unselected_color_name": "WHITE_TEXT",
     "effect_name":           "REVERSE_BLINK",
     "speed_factor":          5,

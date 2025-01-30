@@ -1,9 +1,6 @@
 # FileName: engine_main.py
-#
 # version: 3.2
-#
 # Summary: Core game loop using IGameRenderer & IGameInput. Skips final render if should_quit is set.
-#
 # Tags: engine, main, loop
 
 import time
@@ -11,16 +8,23 @@ import debug
 
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
 from engine_framerate import manage_framerate
-from controls_main import (handle_common_keys, handle_editor_keys, handle_play_keys)
+from controls_main import (
+    handle_common_actions,
+    handle_editor_actions,
+    handle_play_actions,
+)
 from engine_respawn import handle_respawns
 from engine_actionflash import update_action_flash
 from engine_npc import update_npcs
 from engine_network import handle_network
 from scenery_main import (get_scenery_def_id_at, apply_tile_effects)
 
-
 def run_game_loop(model, context, game_input, game_renderer):
-    """The main logic loop, using IGameRenderer & IGameInput interfaces."""
+    """
+    The main logic loop, using IGameRenderer & IGameInput. 
+    Engine code here does NOT import curses or do curses calls.
+    """
+
     model.context = context
 
     # Center camera on player once at start
@@ -31,39 +35,23 @@ def run_game_loop(model, context, game_input, game_renderer):
     model.should_quit = False
 
     while not model.should_quit:
-        # 1) Get all actions
+        # 1) Gather input actions
         actions = game_input.get_actions()
         for act in actions:
-            key = map_action_to_keycode(act)
-            if key is None:
-                # e.g. "QUIT" or unhandled
-                if act == "QUIT":
-                    model.should_quit = True
-                continue
-
-            # Pass the key to old controls logic
-            did_move, want_quit = handle_common_keys(
-                key,
-                model,
-                game_renderer,
-                lambda x, y: mark_dirty(model, x, y)
+            # Pass the action to controls logic
+            did_move, want_quit = handle_common_actions(
+                act, model, game_renderer, lambda x, y: mark_dirty(model, x, y)
             )
             if want_quit:
                 model.should_quit = True
                 break
 
-            model.full_redraw_needed = handle_editor_keys(
-                key,
-                model,
-                game_renderer,
-                model.full_redraw_needed,
+            model.full_redraw_needed = handle_editor_actions(
+                act, model, game_renderer, model.full_redraw_needed,
                 lambda x, y: mark_dirty(model, x, y)
             )
-            model.full_redraw_needed = handle_play_keys(
-                key,
-                model,
-                game_renderer,
-                model.full_redraw_needed,
+            model.full_redraw_needed = handle_play_actions(
+                act, model, game_renderer, model.full_redraw_needed,
                 lambda x, y: mark_dirty(model, x, y)
             )
 
@@ -88,6 +76,7 @@ def run_game_loop(model, context, game_input, game_renderer):
         dx = model.camera_x - old_cam_x
         dy = model.camera_y - old_cam_y
 
+        # If camera jumped more than 1 tile, do a full redraw
         if abs(dx) > 1 or abs(dy) > 1:
             model.full_redraw_needed = True
         else:
@@ -99,12 +88,10 @@ def run_game_loop(model, context, game_input, game_renderer):
         update_npcs(model, lambda x, y: mark_dirty(model, x, y))
         handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
 
-        # sliding if no new actions
+        # If sliding is enabled, move player if no new actions
         if context.enable_sliding and not actions:
             tile_def_id = get_scenery_def_id_at(
-                model.player.x,
-                model.player.y,
-                model.placed_scenery
+                model.player.x, model.player.y, model.placed_scenery
             )
             old_px, old_py = model.player.x, model.player.y
             apply_tile_effects(
@@ -128,41 +115,5 @@ def run_game_loop(model, context, game_input, game_renderer):
         # 5) Framerate
         manage_framerate(20)
 
-
 def mark_dirty(model, x, y):
     model.dirty_tiles.add((x, y))
-
-
-def map_action_to_keycode(action):
-    """Map the action string to old integer key codes (used by handle_*_keys)."""
-    if action == "QUIT":
-        return None
-    elif action == "YES_QUIT":
-        return ord('y')
-    elif action == "MOVE_UP":
-        return ord('w')
-    elif action == "MOVE_DOWN":
-        return ord('s')
-    elif action == "MOVE_LEFT":
-        return ord('a')
-    elif action == "MOVE_RIGHT":
-        return ord('d')
-    elif action == "EDITOR_TOGGLE":
-        return ord('e')
-    elif action == "SAVE_QUICK":
-        return ord('o')
-    elif action == "DEBUG_TOGGLE":
-        return ord('v')
-    elif action == "INTERACT":
-        return ord(' ')
-    elif action == "REMOVE_TOP":
-        return ord('x')
-    elif action == "PLACE_ITEM":
-        return ord('p')
-    elif action == "UNDO":
-        return ord('u')
-    elif action == "NEXT_ITEM":
-        return ord('l')
-    elif action == "PREV_ITEM":
-        return ord('k')
-    return None

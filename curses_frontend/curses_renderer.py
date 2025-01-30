@@ -1,25 +1,30 @@
 # FileName: curses_renderer.py
 #
-# version: 3.5
+# version: 3.6
 #
-# Summary: A curses-based in-game renderer implementing IGameRenderer.
+# Summary: A curses-based in-game renderer implementing IGameRenderer,
+#          plus a new layered render_scene(...) approach for menus or overlays.
 #
 # Tags: curses, ui, rendering
 
 import curses
 import debug
-import os
-
 from interfaces import IGameRenderer
 from .curses_color_init import init_colors, color_pairs
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
+from .curses_common import draw_screen_frame
 from engine_render import LEGACY_COLOR_MAP
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 
 class CursesGameRenderer(IGameRenderer):
-    """Implements IGameRenderer using curses: handles rendering the game world, partial or full redraw, etc."""
+    """
+    Implements IGameRenderer using curses: handles rendering the game world,
+    partial or full redraw, etc.
+    Also provides a 'render_scene(...)' method to draw layered scenes (menus, overlays).
+    """
+
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.map_top_offset = 3
@@ -29,9 +34,78 @@ class CursesGameRenderer(IGameRenderer):
         curses.curs_set(0)
         init_colors()
 
-    def get_visible_size(self):
-        max_h, max_w = self.stdscr.getmaxyx()
-        return (max_w, max_h - self.map_top_offset)
+    ########################################################################
+    # 1) NEW: LAYERED SCENE RENDERING
+    ########################################################################
+
+    def render_scene(self, model, scene_layers):
+        """
+        Render a scene composed of multiple layers, each with:
+            {
+              "name": "some_name",
+              "visible": True/False,
+              "z": <number>
+            }
+
+        We'll sort them by z ascending, then call a sub-render function
+        for each layer if 'visible' is True.
+
+        If your scene does not need the 'model', pass None, or add some data as needed.
+        """
+        self.stdscr.erase()
+
+        # Sort by z, then draw
+        sorted_layers = sorted(scene_layers, key=lambda l: l["z"])
+        for layer in sorted_layers:
+            if layer.get("visible", True):
+                layer_name = layer.get("name", "")
+                self._render_layer(layer_name, model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _render_layer(self, layer_name, model):
+        """
+        Actually draw the requested layer_name. For a real game, you could
+        implement dictionary-based dispatch:
+          if layer_name == "background": ...
+          elif layer_name == "art_layer": ...
+          elif layer_name == "game_world": ...
+        etc.
+
+        For demonstration, let's do a few placeholders or call existing logic if relevant.
+        """
+        if layer_name == "background":
+            draw_screen_frame(self.stdscr, "UI_CYAN")
+
+        elif layer_name == "game_world":
+            # If we want to reuse the existing logic for in-game rendering:
+            if model:
+                self._full_redraw(model)
+
+        elif layer_name == "title_and_art":
+            # Possibly draw some ASCII art from model or a known constant
+            pass
+
+        elif layer_name == "menu_overlay":
+            # e.g., draw menu text, highlight, etc.
+            pass
+
+        # etc.  This is purely an example.
+
+    ########################################################################
+    # 2) CLASSIC GAME RENDERING (used during normal gameplay)
+    ########################################################################
+
+    def render(self, model):
+        if model.full_redraw_needed:
+            self._full_redraw(model)
+            model.full_redraw_needed = False
+        else:
+            self._update_dirty_tiles(model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
 
     def on_camera_move(self, dx, dy, model):
         if abs(dx) > 0 or abs(dy) > 1:
@@ -57,18 +131,10 @@ class CursesGameRenderer(IGameRenderer):
 
         self.stdscr.setscrreg(0, max_h - 1)
 
-    def render(self, model):
-        if model.full_redraw_needed:
-            self._full_redraw(model)
-            model.full_redraw_needed = False
-        else:
-            self._update_dirty_tiles(model)
-
-        self.stdscr.noutrefresh()
-        curses.doupdate()
-
     def prompt_yes_no(self, question: str) -> bool:
-        """A simple curses-based yes/no prompt at the bottom row."""
+        """
+        A simple curses-based yes/no prompt at the bottom row, returning bool.
+        """
         max_h, max_w = self.stdscr.getmaxyx()
         row = max_h - 2
         safe_addstr(self.stdscr, row, 0, " " * (max_w - 1), 0, clip_borders=False)
@@ -86,17 +152,17 @@ class CursesGameRenderer(IGameRenderer):
                 return False
 
     def get_curses_window(self):
-        """Return the underlying curses window for use by external UI calls."""
         return self.stdscr
 
     ########################################################################
-    # Private helpers
+    # 3) INTERNAL GAME RENDER UTILS
     ########################################################################
 
     def _full_redraw(self, model):
         self.stdscr.clear()
         self._draw_screen_frame()
 
+        # Show either editor info or player's inventory
         if model.context.enable_editor_commands and model.editor_scenery_list:
             sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
             self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}", "WHITE_TEXT")
@@ -129,7 +195,7 @@ class CursesGameRenderer(IGameRenderer):
         self._draw_player_on_top(model)
 
     def _draw_single_tile(self, wx, wy, sx, sy, model):
-        from .curses_highlight import get_color_attr
+        # clear background first
         blank_attr = get_color_attr("white_on_black")
         safe_addch(self.stdscr, sy, sx, " ", blank_attr, clip_borders=True)
 
@@ -142,16 +208,19 @@ class CursesGameRenderer(IGameRenderer):
         if floor_obj:
             floor_fg_index = self._draw_floor(floor_obj, sx, sy)
 
+        # Draw objects
         for obj in tile_layers.get(OBJECTS_LAYER, []):
-            # skip if tree trunk/top in the same tile as player
             if obj.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID):
+                # skip if same tile as player
                 if (wx, wy) == (model.player.x, model.player.y):
                     continue
             self._draw_object(obj, sx, sy, floor_fg_index)
 
+        # Draw items
         for it in tile_layers.get(ITEMS_LAYER, []):
             self._draw_object(it, sx, sy, floor_fg_index)
 
+        # Draw entities
         for ent in tile_layers.get(ENTITIES_LAYER, []):
             self._draw_object(ent, sx, sy, floor_fg_index)
 
@@ -165,11 +234,11 @@ class CursesGameRenderer(IGameRenderer):
         return fg_index
 
     def _draw_object(self, obj, sx, sy, floor_fg_index):
-        from .curses_highlight import get_color_attr
         info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
         ch = info.get("ascii_char", obj.char)
         obj_fg_index = info.get("ascii_color", obj.color_pair)
 
+        # If it's a tree top on the player's tile, we might skip or handle differently
         if obj.definition_id == TREE_TOP_ID:
             color_name = LEGACY_COLOR_MAP.get(obj_fg_index, "green_on_black")
             attr = get_color_attr(color_name)
@@ -200,11 +269,11 @@ class CursesGameRenderer(IGameRenderer):
             floor_base = LEGACY_COLOR_MAP.get(floor_fg_index, "white_on_black")
             fg_part, bg_part = parse_two_color_names(floor_base)
 
-            from .curses_highlight import get_color_attr
             color_name = f"white_on_{bg_part}"
             attr_bold = get_color_attr(color_name, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
 
+            # If there's a trunk/top in the same tile, it might appear over the player
             objects_list = tile_layers.get(OBJECTS_LAYER, [])
             trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
             if trunk_tops:
@@ -219,33 +288,7 @@ class CursesGameRenderer(IGameRenderer):
                     safe_addch(self.stdscr, py, px, ch, trunk_attr, clip_borders=True)
 
     def _draw_screen_frame(self):
-        h, w = self.stdscr.getmaxyx()
-        from .curses_highlight import get_color_attr
-        border_attr = get_color_attr("UI_CYAN")
-
-        # top line
-        for x in range(w):
-            safe_addch(self.stdscr, 0, x, curses.ACS_HLINE, border_attr, clip_borders=False)
-        safe_addch(self.stdscr, 0, 0, curses.ACS_ULCORNER, border_attr, clip_borders=False)
-        safe_addch(self.stdscr, 0, w - 1, curses.ACS_URCORNER, border_attr, clip_borders=False)
-
-        # bottom line
-        for x in range(w):
-            safe_addch(self.stdscr, h - 1, x, curses.ACS_HLINE, border_attr, clip_borders=False)
-        safe_addch(self.stdscr, h - 1, 0, curses.ACS_LLCORNER, border_attr, clip_borders=False)
-        safe_addch(self.stdscr, h - 1, w - 1, curses.ACS_LRCORNER, border_attr, clip_borders=False)
-
-        # left/right
-        for y in range(1, h - 1):
-            safe_addch(self.stdscr, y, 0, curses.ACS_VLINE, border_attr, clip_borders=False)
-            safe_addch(self.stdscr, y, w - 1, curses.ACS_VLINE, border_attr, clip_borders=False)
-
-        # debug label
-        if debug.DEBUG_CONFIG["enabled"]:
-            label = "Debug mode: On"
-            col = w - len(label) - 2
-            dbg_attr = get_color_attr("WHITE_TEXT")
-            safe_addstr(self.stdscr, 0, col, label, dbg_attr, clip_borders=False)
+        draw_screen_frame(self.stdscr)
 
     def _draw_text(self, row, col, text, color_name, bold=False, underline=False):
         from .curses_highlight import get_color_attr

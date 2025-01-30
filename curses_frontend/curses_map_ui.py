@@ -11,11 +11,11 @@ import os
 import debug
 
 from .curses_color_init import init_colors, color_pairs
-from .curses_animations import draw_art
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
 from .curses_art_skins import CROCODILE
 from .curses_highlight import draw_global_selector_line
-from .curses_utils import safe_addstr, safe_addch, get_color_attr
+from .curses_utils import safe_addstr, get_color_attr
 
 def draw_load_map_screen(stdscr):
     stdscr.clear()
@@ -24,7 +24,7 @@ def draw_load_map_screen(stdscr):
     curses.curs_set(0)
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Load Map", row=1)
-    draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
+    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
     instructions = [
         "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
@@ -38,10 +38,10 @@ def draw_save_map_screen(stdscr):
     curses.curs_set(0)
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Save Map", row=1)
-    draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
+    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
     instructions = [
-        "Select a map to overwrite, 'n'=new, 'ENTER'=cancel, 'v'=toggle debug"
+        "Select a map to overwrite, 'n'=new, ENTER=cancel, 'v'=toggle debug"
     ]
     draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
 
@@ -50,7 +50,6 @@ def prompt_for_filename(stdscr, prompt):
     draw_save_map_screen(stdscr)
     max_h, max_w = stdscr.getmaxyx()
 
-    # Make typed text visible
     curses.echo()
     curses.curs_set(1)
     stdscr.nodelay(False)
@@ -69,12 +68,11 @@ def prompt_for_filename(stdscr, prompt):
         if filename_bytes:
             return filename_bytes.decode('utf-8', errors='ignore').strip()
 
-    # Revert if something goes wrong
     restore_input_mode(stdscr)
     return ""
 
 def restore_input_mode(stdscr):
-    """Restores standard no-echo, invisible cursor, non-blocking input mode."""
+    """Restore standard no-echo, invisible cursor, non-blocking input mode."""
     curses.noecho()
     curses.curs_set(0)
     curses.napms(50)
@@ -82,13 +80,14 @@ def restore_input_mode(stdscr):
     stdscr.nodelay(True)
 
 def prompt_delete_confirmation(stdscr, filename):
-    """Prompt the user: "Delete ? (y/n)". Return True if 'y' else False."""
+    """Prompt the user: 'Delete X? (y/n)'. Return True if 'y', else False."""
     max_h, max_w = stdscr.getmaxyx()
     question = f"Delete '{filename}'? (y/n)"
     attr = get_color_attr("WHITE_TEXT")
 
     row = max_h - 2
-    safe_addstr(stdscr, row, 2, " " * (max_w - 4), attr, clip_borders=False)
+    blank_line = " " * (max_w - 4)
+    safe_addstr(stdscr, row, 2, blank_line, attr, clip_borders=False)
     safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
     stdscr.refresh()
 
@@ -132,9 +131,7 @@ def display_map_list(stdscr):
                 display_text = f"{i}) {fname}"
 
             is_sel = (i == selected_index)
-            draw_global_selector_line(
-                stdscr,
-                row,
+            draw_global_selector_line(stdscr, row,
                 f"> {display_text}" if is_sel else f"  {display_text}",
                 is_selected=is_sel,
                 frame=frame_count
@@ -201,7 +198,10 @@ def display_map_list_for_save(stdscr):
 
         if files:
             attr_cyan = get_color_attr("UI_CYAN")
-            _draw_global_text(stdscr, row, "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:", attr_cyan)
+            _draw_global_text(stdscr, row,
+                "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:",
+                attr_cyan
+            )
             row += 1
 
             for i, filename in enumerate(files, start=1):
@@ -212,18 +212,14 @@ def display_map_list_for_save(stdscr):
                 row += 1
 
             if row < max_h - 1:
-                _draw_global_text(
-                    stdscr,
-                    row,
+                _draw_global_text(stdscr, row,
                     "Enter choice or press Enter to cancel:",
                     attr_cyan
                 )
                 row += 1
         else:
             attr_cyan = get_color_attr("UI_CYAN")
-            _draw_global_text(
-                stdscr,
-                row,
+            _draw_global_text(stdscr, row,
                 "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
                 attr_cyan
             )
@@ -282,7 +278,6 @@ def load_map_ui(stdscr):
         elif selection[0] == "EDIT":
             return ("EDIT", selection[1])
     elif isinstance(selection, dict):
-        # user chose "Generate a new map" => run in play mode
         return selection
     return selection
 
@@ -326,6 +321,3 @@ def save_map_ui(stdscr, placed_scenery, player=None,
 
     if file_existed and notify_overwrite:
         curses.napms(500)
-
-def ask_save_generated_map_ui(stdscr, placed_scenery, world_width, world_height, player=None):
-    return

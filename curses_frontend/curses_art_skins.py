@@ -57,8 +57,8 @@ MAIN_MENU_ART = [
 ]
 
 CROCODILE = [
-    "                _ ___                /^^\ /^\  /^^\*",
-    "    _          *@)@) \            ,,/ '`~`'~~ ', `\\.",
+    "                _ ___                /^^\\ /^\\  /^^\\*",
+    "    _          *@)@) \\            ,,/ '`~`'~~ ', `\\.",
     "  _/o\\_ _ _ _/~`.`...'~\\        ./~~..,'`','',.,' '  ~:",
     " / `','.~,~.~  .   , . , ~|,   ,/ .,' , ,. .. ,,.   `,  ~\\*",
     "( ' *' _ '*`_  '  .    ,`\\*/ .' ..' '  `  `   `..  `,   \\*",
@@ -69,14 +69,10 @@ CROCODILE = [
     "   `'~~ `'~~ `'~~ `'~~  \\_)(_)(_)/  `~~' \\_)(*)(*)/ ~'`\\*..*,.*,'*;*;*;*;*;"
 ]
 
-# You can add more ASCII sets (like DRAGON_ART_1, etc.) here if you want them.
-# For now, we keep this as the "skins" or "art data" file.
-
-# Example of a dictionary-based "skin" approach:
 DEFAULT_SKIN = {
     "main_menu_art": MAIN_MENU_ART,
     "border_color":  "UI_CYAN",
     "title_color":   "UI_WHITE_ON_BLUE",
 }
 
-CURRENT_SKIN = DEFAULT_SKIN  # Could be swapped out for e.g. WINTER_SKIN, HALLOWEEN_SKIN, etc.
+CURRENT_SKIN = DEFAULT_SKIN

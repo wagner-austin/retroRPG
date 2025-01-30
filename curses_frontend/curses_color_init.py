@@ -24,13 +24,11 @@ BASE_COLORS = {
 EXTENDED_COLORS = {
     "light_gray": 8,
     "dark_gray":  9,
-    # You could add more if desired: "bright_green":10, etc.
+    # Could add more if terminal supports it.
 }
 
 def define_extended_colors():
-    """Attempt to initialize extra colors if the terminal supports color redefinition.
-    Each init_color(index, r, g, b) has r,g,b from 0..1000.
-    """
+    """Attempt to initialize extra colors if the terminal supports color redefinition."""
     if not curses.can_change_color():
         return
     # light_gray => ~70% white
@@ -47,14 +45,13 @@ def init_colors():
     # Attempt to define extended colors if supported
     define_extended_colors()
 
-    # Merge base + extended color definitions
+    # Merge base + extended
     all_colors = dict(BASE_COLORS)
     all_colors.update(EXTENDED_COLORS)
 
     pair_index = 1
     for fg_name, fg_val in all_colors.items():
         for bg_name, bg_val in all_colors.items():
-            # Only define pairs if within supported range
             if fg_val < curses.COLORS and bg_val < curses.COLORS:
                 pair_name = f"{fg_name}_on_{bg_name}"
                 curses.init_pair(pair_index, fg_val, bg_val)
@@ -80,5 +77,4 @@ def init_colors():
         if real_name in color_pairs:
             color_pairs[alias_name] = color_pairs[real_name]
         else:
-            # fallback to white_on_black
             color_pairs[alias_name] = color_pairs.get("white_on_black", 0)

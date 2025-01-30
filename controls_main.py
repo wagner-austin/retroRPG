@@ -1,9 +1,10 @@
 # FileName: controls_main.py
 # version: 2.14
-# Summary: Interprets user input for both play and editor modes. Now uses renderer for UI save prompts.
+# Summary: Interprets user input actions for both play and editor modes.
+#          No direct curses usage; we rely on action strings from IGameInput.
 # Tags: controls, input, main
 
-import curses
+import time
 import debug
 from scenery_main import (
     get_objects_at,
@@ -12,15 +13,14 @@ from scenery_main import (
 )
 from utils_main import get_front_tile
 
-
-def handle_common_keys(key, model, renderer, mark_dirty_func):
+def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
-    Handle keys that apply to *both* play and editor modes:
-      - Quitting (y)
-      - Movement (WASD/arrows)
-      - Debug toggle (v)
-      - Mode switch (e)
-      - Quick-save (o)
+    Handle actions that apply to BOTH play and editor modes:
+      - YES_QUIT => user pressed 'y' after a quit prompt
+      - SAVE_QUICK => quick save
+      - MOVE_UP / MOVE_DOWN / MOVE_LEFT / MOVE_RIGHT => movement
+      - DEBUG_TOGGLE => toggles debug
+      - EDITOR_TOGGLE => toggles editor mode
     """
     player = model.player
     context = model.context
@@ -29,14 +29,9 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
     should_quit = False
 
     def _perform_quick_save():
-        """
-        Called when user presses 'o'.
-        We need a curses window to prompt user for the save filename, so we use
-        renderer.get_curses_window() if available. If not, do nothing.
-        """
+        """Called when user triggers SAVE_QUICK."""
         if not renderer:
             return
-        # Attempt to get the curses window
         if not hasattr(renderer, "get_curses_window"):
             return
         ui_win = renderer.get_curses_window()
@@ -67,19 +62,17 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
         model.full_redraw_needed = True
 
     def _prompt_yes_no(question):
-        """
-        Called e.g. when pressing 'y' on a generated map.
-        We only show the prompt if we have a renderer with prompt_yes_no.
-        Otherwise, return False.
-        """
+        """Use renderer's 'prompt_yes_no' if available."""
         if not renderer:
             return False
         if not hasattr(renderer, "prompt_yes_no"):
             return False
         return renderer.prompt_yes_no(question)
 
-    # 'y' => Quit
-    if key == ord('y'):
+    # ACTION HANDLERS:
+
+    if action == "YES_QUIT":
+        # "YES_QUIT" typically means user confirmed they want to quit
         if model.loaded_map_filename:
             _perform_quick_save()
             should_quit = True
@@ -91,8 +84,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
             should_quit = True
         return (did_move, should_quit)
 
-    # Movement
-    elif key in (ord('w'), ord('W'), curses.KEY_UP):
+    elif action == "MOVE_UP":
         for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
             old_x, old_y = player.x, player.y
             player.move("up", model.world_width, model.world_height, model.placed_scenery)
@@ -101,7 +93,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
                 mark_dirty_func(player.x, player.y)
                 did_move = True
 
-    elif key in (ord('s'), ord('S'), curses.KEY_DOWN):
+    elif action == "MOVE_DOWN":
         for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
             old_x, old_y = player.x, player.y
             player.move("down", model.world_width, model.world_height, model.placed_scenery)
@@ -110,7 +102,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
                 mark_dirty_func(player.x, player.y)
                 did_move = True
 
-    elif key in (ord('a'), ord('A'), curses.KEY_LEFT):
+    elif action == "MOVE_LEFT":
         for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
             old_x, old_y = player.x, player.y
             player.move("left", model.world_width, model.world_height, model.placed_scenery)
@@ -119,7 +111,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
                 mark_dirty_func(player.x, player.y)
                 did_move = True
 
-    elif key in (ord('d'), ord('D'), curses.KEY_RIGHT):
+    elif action == "MOVE_RIGHT":
         for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
             old_x, old_y = player.x, player.y
             player.move("right", model.world_width, model.world_height, model.placed_scenery)
@@ -128,13 +120,11 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
                 mark_dirty_func(player.x, player.y)
                 did_move = True
 
-    # Toggle Debug
-    elif key == ord('v'):
+    elif action == "DEBUG_TOGGLE":
         debug.toggle_debug()
         model.full_redraw_needed = True
 
-    # Switch between play/editor
-    elif key == ord('e'):
+    elif action == "EDITOR_TOGGLE":
         if context.mode_name == "play":
             context.mode_name = "editor"
             context.enable_editor_commands = True
@@ -153,20 +143,20 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
 
         model.full_redraw_needed = True
 
-    # 'o' => Quick save
-    elif key == ord('o'):
+    elif action == "SAVE_QUICK":
         _perform_quick_save()
 
     return (did_move, should_quit)
 
 
-def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func):
+def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
     """
-    Editor-only:
-      - p => place object
-      - x => remove topmost
-      - u => undo
-      - l/k => cycle object
+    Editor-only actions:
+      - PLACE_ITEM => place object
+      - REMOVE_TOP => remove topmost
+      - UNDO => undo
+      - NEXT_ITEM => cycle object forward
+      - PREV_ITEM => cycle object backward
     """
     if not model.context.enable_editor_commands:
         return full_redraw_needed
@@ -182,7 +172,7 @@ def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func
         append_scenery
     )
 
-    if key == ord('p'):
+    if action == "PLACE_ITEM":
         if editor_scenery_list:
             current_def_id = editor_scenery_list[editor_scenery_index][0]
             newly_placed = place_scenery_item(
@@ -197,7 +187,7 @@ def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func
             if newly_placed:
                 model.editor_undo_stack.append(("added", newly_placed))
 
-    elif key == ord('x'):
+    elif action == "REMOVE_TOP":
         px, py = player.x, player.y
         tile_objs = get_objects_at(model.placed_scenery, px, py)
         if tile_objs:
@@ -206,24 +196,24 @@ def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func
             model.editor_undo_stack.append(("removed", [top_obj]))
             mark_dirty_func(px, py)
 
-    elif key == ord('u'):
+    elif action == "UNDO":
         if model.editor_undo_stack:
-            action, objects_list = model.editor_undo_stack.pop()
-            if action == "added":
+            action_type, objects_list = model.editor_undo_stack.pop()
+            if action_type == "added":
                 for obj in reversed(objects_list):
                     remove_scenery(model.placed_scenery, obj)
                     mark_dirty_func(obj.x, obj.y)
-            elif action == "removed":
+            elif action_type == "removed":
                 for obj in objects_list:
                     append_scenery(model.placed_scenery, obj)
                     mark_dirty_func(obj.x, obj.y)
 
-    elif key == ord('l'):
+    elif action == "NEXT_ITEM":
         if editor_scenery_list:
             model.editor_scenery_index = (editor_scenery_index + 1) % len(editor_scenery_list)
             full_redraw_needed = True
 
-    elif key == ord('k'):
+    elif action == "PREV_ITEM":
         if editor_scenery_list:
             model.editor_scenery_index = (editor_scenery_index - 1) % len(editor_scenery_list)
             full_redraw_needed = True
@@ -231,16 +221,16 @@ def handle_editor_keys(key, model, renderer, full_redraw_needed, mark_dirty_func
     return full_redraw_needed
 
 
-def handle_play_keys(key, model, renderer, full_redraw_needed, mark_dirty_func):
+def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
     """
-    Play-mode keys: space => chop/mine
+    Play-mode only actions: e.g. INTERACT => chop/mine
     """
     if model.context.enable_editor_commands:
         return full_redraw_needed
 
     player = model.player
     from_scenery = model.placed_scenery
-    if key == ord(' '):
+    if action == "INTERACT":
         fx, fy = get_front_tile(player)
         tile_objs = get_objects_at(from_scenery, fx, fy)
         found_something = False

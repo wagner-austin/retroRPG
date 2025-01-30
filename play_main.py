@@ -1,19 +1,16 @@
 # FileName: play_main.py
-#
 # version: 3.0
-#
-# Summary: Top-level function for entering Play mode, linking user’s map choice
-#          to parse_and_run_play.
-#
+# Summary: Top-level function for entering Play mode, linking user’s map choice to parse_and_run_play.
 # Tags: play, main, engine
 
-import curses
-from curses_frontend.curses_map_ui import load_map_ui  # Updated import
+# Note: No 'import curses' needed. We pass 'stdscr' from MenuFlowManager.
+
+from curses_frontend.curses_map_ui import load_map_ui
 from play_runner import parse_and_run_play
 
-
 def play_main(stdscr):
-    """Called when user chooses 'Play' from the main menu.
+    """
+    Called when user chooses 'Play' from the main menu.
     We always load a map in play mode, then inside the game,
     you can press 'e' to toggle to the editor if desired.
     """
@@ -23,7 +20,7 @@ def play_main(stdscr):
             # user canceled => back to main menu
             return
 
-        # If load_map_ui returns a tuple (e.g. ("EDIT", filename)), handle it:
+        # If load_map_ui returns a tuple, handle it
         if isinstance(selection, tuple):
             action_type, actual_map = selection[0], selection[1]
             if action_type == "EDIT_GENERATE":

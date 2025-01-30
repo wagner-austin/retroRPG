@@ -1,11 +1,10 @@
 # FileName: play_runner.py
-# version: 3.0 (now calls run_game_loop with CursesGameInput/CursesGameRenderer)
+# version: 3.0
 # Summary: Orchestrates loading a map and calling the new engine loop for play or editor mode.
 # Tags: play, runner, map, editor
 
 import os
 import json
-import curses
 
 from map_io_storage import parse_map_dict
 from player_char import Player
@@ -13,17 +12,14 @@ from player_char_io import load_player, save_player
 from scenery_main import SceneryObject, ensure_layered_format
 from model_main import GameModel, GameContext
 
-# We now import the new front-end classes and the new engine loop:
+# Now we use the front-end classes for input & rendering, but do NOT import curses here.
 from curses_frontend.curses_input import CursesGameInput
 from curses_frontend.curses_renderer import CursesGameRenderer
 from engine_main import run_game_loop
 
-##############################################################################
-# EDITOR
-##############################################################################
 def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     """
-    Loads/Parses the map data, sets up model in 'editor' mode,
+    Loads/parses the map data, sets up model in 'editor' mode,
     then calls run_game_loop with the curses front-end.
     """
     if isinstance(filename_or_data, dict):
@@ -95,7 +91,7 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
     # Save player data
     save_player(player)
 
-    # If not generated, store new coords in the map file
+    # If not generated, store new coords
     if (not is_generated) and model_filename:
         maps_dir = "maps"
         map_path = os.path.join(maps_dir, model_filename)
@@ -108,12 +104,9 @@ def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
             save_map_file(map_path, existing_data)
 
 
-##############################################################################
-# PLAY
-##############################################################################
 def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
     """
-    Similar to parse_and_run_editor, but 'play' mode.
+    Similar to parse_and_run_editor, but in 'play' mode.
     """
     if isinstance(filename_or_data, dict):
         raw_data = filename_or_data

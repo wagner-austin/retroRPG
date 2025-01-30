@@ -10,9 +10,11 @@ import curses
 from interfaces import IGameInput
 
 class CursesGameInput(IGameInput):
-    """Implements IGameInput for curses: get_actions() reads the keyboard buffer,
-    returns a list of action strings.
     """
+    Implements IGameInput for curses: get_actions() reads the keyboard buffer,
+    returns a list of action strings like ["MOVE_UP", "QUIT", "INTERACT", etc.].
+    """
+
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.stdscr.nodelay(True)
@@ -21,7 +23,7 @@ class CursesGameInput(IGameInput):
 
     def get_actions(self):
         actions = []
-        # read up to 5 keystrokes at once
+        # read up to ~5 keystrokes at once
         for _ in range(5):
             key = self.stdscr.getch()
             if key == -1:
