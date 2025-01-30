@@ -381,7 +381,7 @@ def main():
                         code_data = f"Error reading file: {e}\n"
 
                     # Write a header, then the code, then a blank line
-                    out_file.write(f"==== File: {summ['filename']} ====\n")
+                    out_file.write("\n")
                     out_file.write(code_data)
                     out_file.write("\n\n")  # blank line between files
 
