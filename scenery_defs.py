@@ -1,6 +1,6 @@
 # FileName: scenery_defs.py
 # version: 1.4
-# Summary: Holds all scenery definition IDs as constants, and loads definitions from an external JSON.
+# Summary: Holds all scenery definition IDs as constants, and loads definitions from an internal Python dict.
 # Tags: scenery, definitions
 
 import os
@@ -24,13 +24,10 @@ EMPTY_FLOOR_ID      = "EmptyFloor"
 DEBUG_DOT_ID        = "DebugDot"
 
 #############################
-# LOAD SCENERY DEFINITIONS FROM JSON
+# LOAD SCENERY DEFINITIONS FROM NEW PYTHON FILE
 #############################
-DATA_FILE = os.path.join(os.path.dirname(__file__), "scenery_defs_data.json")
-
-with open(DATA_FILE, "r", encoding="utf-8") as f:
-    ALL_SCENERY_DEFS = json.load(f)
-
+# Instead of reading from a JSON file, we now import the dictionary directly:
+from scenery_defs_data import ALL_SCENERY_DEFS
 
 def build_forward_map():
     """
@@ -42,7 +39,6 @@ def build_forward_map():
         cp = info.get("ascii_color", 0)
         forward[def_id] = (c, cp)
     return forward
-
 
 def build_reverse_map():
     """
