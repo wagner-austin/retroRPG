@@ -43,7 +43,7 @@ def handle_common_keys(key, model, renderer, mark_dirty_func):
         if not ui_win:
             return
 
-        from map_io_ui import save_map_ui
+        from curses_frontend.curses_map_ui import save_map_ui
         if model.loaded_map_filename:
             # Overwrite existing
             save_map_ui(

@@ -4,7 +4,7 @@
 # Tags: main, entry, initialization
 
 import curses
-from color_init import init_colors
+from curses_frontend.curses_color_init import init_colors
 from menu_flow_manager import MenuFlowManager
 
 def run_game(stdscr):

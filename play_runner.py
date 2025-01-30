@@ -14,7 +14,8 @@ from scenery_main import SceneryObject, ensure_layered_format
 from model_main import GameModel, GameContext
 
 # We now import the new front-end classes and the new engine loop:
-from curses_ui import CursesGameInput, CursesGameRenderer
+from curses_frontend.curses_input import CursesGameInput
+from curses_frontend.curses_renderer import CursesGameRenderer
 from engine_main import run_game_loop
 
 ##############################################################################

@@ -6,7 +6,7 @@
 import curses
 
 # We import the scene functions and play_main so we can call them:
-from scene_main import scene_home_screen, scene_settings_screen
+from curses_frontend.curses_menus import scene_home_screen, scene_settings_screen
 from play_main import play_main
 
 class MenuFlowManager:

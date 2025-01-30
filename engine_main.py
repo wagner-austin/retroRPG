@@ -1,29 +1,26 @@
 # FileName: engine_main.py
+#
 # version: 3.2
+#
 # Summary: Core game loop using IGameRenderer & IGameInput. Skips final render if should_quit is set.
+#
 # Tags: engine, main, loop
+
+import time
+import debug
 
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
 from engine_framerate import manage_framerate
-from controls_main import (
-    handle_common_keys,
-    handle_editor_keys,
-    handle_play_keys
-)
+from controls_main import (handle_common_keys, handle_editor_keys, handle_play_keys)
 from engine_respawn import handle_respawns
 from engine_actionflash import update_action_flash
 from engine_npc import update_npcs
 from engine_network import handle_network
-from scenery_main import (
-    get_scenery_def_id_at,
-    apply_tile_effects
-)
-import debug
+from scenery_main import (get_scenery_def_id_at, apply_tile_effects)
+
 
 def run_game_loop(model, context, game_input, game_renderer):
-    """
-    The main logic loop, using IGameRenderer & IGameInput interfaces.
-    """
+    """The main logic loop, using IGameRenderer & IGameInput interfaces."""
     model.context = context
 
     # Center camera on player once at start
@@ -42,7 +39,6 @@ def run_game_loop(model, context, game_input, game_renderer):
                 # e.g. "QUIT" or unhandled
                 if act == "QUIT":
                     model.should_quit = True
-                # optionally handle "YES_QUIT" here if needed
                 continue
 
             # Pass the key to old controls logic
@@ -71,7 +67,7 @@ def run_game_loop(model, context, game_input, game_renderer):
                 lambda x, y: mark_dirty(model, x, y)
             )
 
-        # If user triggered quit, break out immediately to skip final re-render
+        # If user triggered quit, skip final re-render
         if model.should_quit:
             break
 
@@ -136,11 +132,9 @@ def run_game_loop(model, context, game_input, game_renderer):
 def mark_dirty(model, x, y):
     model.dirty_tiles.add((x, y))
 
+
 def map_action_to_keycode(action):
-    """
-    Map the action string to old integer key codes
-    for handle_common_keys, handle_editor_keys, etc.
-    """
+    """Map the action string to old integer key codes (used by handle_*_keys)."""
     if action == "QUIT":
         return None
     elif action == "YES_QUIT":

@@ -9,7 +9,7 @@ def update_camera_with_deadzone(player_x: int, player_y: int,
                                 camera_x: int, camera_y: int,
                                 visible_cols: int, visible_rows: int,
                                 world_width: int, world_height: int,
-                                dead_zone: int = 2) -> Tuple[int, int]:
+                                dead_zone: int = 3) -> Tuple[int, int]:
     """
     Adjust camera_x, camera_y so the player remains within the 'dead_zone' inside
     the visible window. No direct curses calls: purely numeric logic.
