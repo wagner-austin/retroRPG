@@ -26,29 +26,29 @@ DEBUG_DOT_ID        = "DebugDot"
 #############################
 # LOAD SCENERY DEFINITIONS FROM NEW PYTHON FILE
 #############################
-# Instead of reading from a JSON file, we now import the dictionary directly:
+# Instead of reading from a JSON file, we import the dictionary directly:
 from scenery_defs_data import ALL_SCENERY_DEFS
 
 def build_forward_map():
     """
-    definition_id -> (char, color_pair)
+    definition_id -> (char, color_name)
     """
     forward = {}
     for def_id, info in ALL_SCENERY_DEFS.items():
         c = info.get("ascii_char", "?")
-        cp = info.get("ascii_color", 0)
-        forward[def_id] = (c, cp)
+        color_name = info.get("color_name", "white_on_black")
+        forward[def_id] = (c, color_name)
     return forward
 
 def build_reverse_map():
     """
-    (char, color_pair) -> definition_id
+    (char, color_name) -> definition_id
     """
     reverse = {}
     for def_id, info in ALL_SCENERY_DEFS.items():
         c = info.get("ascii_char", "?")
-        cp = info.get("ascii_color", 0)
-        reverse[(c, cp)] = def_id
+        color_name = info.get("color_name", "white_on_black")
+        reverse[(c, color_name)] = def_id
     return reverse
 
 __all__ = [

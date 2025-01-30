@@ -1,5 +1,4 @@
 # FileName: curses_renderer.py
-#
 # version: 3.6
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer,
@@ -14,15 +13,14 @@ from .curses_color_init import init_colors, color_pairs
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
-from engine_render import LEGACY_COLOR_MAP
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 
 class CursesGameRenderer(IGameRenderer):
     """
     Implements IGameRenderer using curses: handles rendering the game world,
-    partial or full redraw, etc.
-    Also provides a 'render_scene(...)' method to draw layered scenes (menus, overlays).
+    partial or full redraw, etc. Also provides a 'render_scene(...)' method
+    to draw layered scenes (menus, overlays).
     """
 
     def __init__(self, stdscr):
@@ -40,17 +38,8 @@ class CursesGameRenderer(IGameRenderer):
 
     def render_scene(self, model, scene_layers):
         """
-        Render a scene composed of multiple layers, each with:
-            {
-              "name": "some_name",
-              "visible": True/False,
-              "z": <number>
-            }
-
-        We'll sort them by z ascending, then call a sub-render function
-        for each layer if 'visible' is True.
-
-        If your scene does not need the 'model', pass None, or add some data as needed.
+        Render a scene composed of multiple layers. We'll sort them by z ascending,
+        then call a sub-render function for each layer if 'visible' is True.
         """
         self.stdscr.erase()
 
@@ -66,32 +55,18 @@ class CursesGameRenderer(IGameRenderer):
 
     def _render_layer(self, layer_name, model):
         """
-        Actually draw the requested layer_name. For a real game, you could
-        implement dictionary-based dispatch:
-          if layer_name == "background": ...
-          elif layer_name == "art_layer": ...
-          elif layer_name == "game_world": ...
-        etc.
-
-        For demonstration, let's do a few placeholders or call existing logic if relevant.
+        Actually draw the requested layer_name. For demonstration, we do placeholders.
         """
         if layer_name == "background":
             draw_screen_frame(self.stdscr, "UI_CYAN")
 
         elif layer_name == "game_world":
-            # If we want to reuse the existing logic for in-game rendering:
             if model:
                 self._full_redraw(model)
 
-        elif layer_name == "title_and_art":
-            # Possibly draw some ASCII art from model or a known constant
-            pass
-
-        elif layer_name == "menu_overlay":
-            # e.g., draw menu text, highlight, etc.
-            pass
-
-        # etc.  This is purely an example.
+        # Additional layers could be here:
+        # elif layer_name == "menu_overlay": ...
+        # etc.
 
     ########################################################################
     # 2) CLASSIC GAME RENDERING (used during normal gameplay)
@@ -203,56 +178,40 @@ class CursesGameRenderer(IGameRenderer):
         if not tile_layers:
             return
 
+        # Floor
         floor_obj = tile_layers.get(FLOOR_LAYER)
-        floor_fg_index = 0
+        floor_color_name = "white_on_black"
         if floor_obj:
-            floor_fg_index = self._draw_floor(floor_obj, sx, sy)
+            info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+            ch = info.get("ascii_char", floor_obj.char)
+            floor_color_name = info.get("color_name", "white_on_black")
+            floor_attr = get_color_attr(floor_color_name)
+            safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
 
-        # Draw objects
-        for obj in tile_layers.get(OBJECTS_LAYER, []):
-            if obj.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID):
-                # skip if same tile as player
-                if (wx, wy) == (model.player.x, model.player.y):
-                    continue
-            self._draw_object(obj, sx, sy, floor_fg_index)
+        # Now draw objects, items, entities on top
+        # Each object gets the floor's background but overrides the foreground
+        obj_list = tile_layers.get(OBJECTS_LAYER, [])
+        obj_list += tile_layers.get(ITEMS_LAYER, [])
+        obj_list += tile_layers.get(ENTITIES_LAYER, [])
 
-        # Draw items
-        for it in tile_layers.get(ITEMS_LAYER, []):
-            self._draw_object(it, sx, sy, floor_fg_index)
+        for obj in obj_list:
+            # if it's a tree trunk or top in player's tile, we might skip drawing over them later
+            info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
+            ch = info.get("ascii_char", obj.char)
+            obj_color_name = info.get("color_name", "white_on_black")
 
-        # Draw entities
-        for ent in tile_layers.get(ENTITIES_LAYER, []):
-            self._draw_object(ent, sx, sy, floor_fg_index)
+            # If it's specifically TreeTop on the player's tile, we do special logic later.
+            if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
+                continue
 
-    def _draw_floor(self, floor_obj, sx, sy):
-        info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
-        ch = info.get("ascii_char", floor_obj.char)
-        fg_index = info.get("ascii_color", floor_obj.color_pair)
-        base_color = LEGACY_COLOR_MAP.get(fg_index, "white_on_black")
-        floor_attr = get_color_attr(base_color)
-        safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
-        return fg_index
+            # Parse floor color to get background
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            # Parse object color to get foreground
+            fg_obj, _ = parse_two_color_names(obj_color_name)
+            final_color = f"{fg_obj}_on_{bg_floor}"
+            attr = get_color_attr(final_color)
 
-    def _draw_object(self, obj, sx, sy, floor_fg_index):
-        info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
-        ch = info.get("ascii_char", obj.char)
-        obj_fg_index = info.get("ascii_color", obj.color_pair)
-
-        # If it's a tree top on the player's tile, we might skip or handle differently
-        if obj.definition_id == TREE_TOP_ID:
-            color_name = LEGACY_COLOR_MAP.get(obj_fg_index, "green_on_black")
-            attr = get_color_attr(color_name)
             safe_addch(self.stdscr, sy, sx, ch, attr, clip_borders=True)
-            return
-
-        floor_base = LEGACY_COLOR_MAP.get(floor_fg_index, "white_on_black")
-        fg_part, bg_part = parse_two_color_names(floor_base)
-
-        obj_color_name = LEGACY_COLOR_MAP.get(obj_fg_index, "white_on_black")
-        real_fg, _ = parse_two_color_names(obj_color_name)
-        final_color = f"{real_fg}_on_{bg_part}"
-        attr = get_color_attr(final_color)
-        safe_addch(self.stdscr, sy, sx, ch, attr, clip_borders=True)
 
     def _draw_player_on_top(self, model):
         px = model.player.x - model.camera_x
@@ -260,37 +219,37 @@ class CursesGameRenderer(IGameRenderer):
         max_h, max_w = self.stdscr.getmaxyx()
 
         if 0 <= px < max_w and 0 <= py < max_h:
+            # Get floor color at player's tile
             tile_layers = model.placed_scenery.get((model.player.x, model.player.y), {})
             floor_obj = tile_layers.get(FLOOR_LAYER)
-            floor_fg_index = 0
+            floor_color_name = "white_on_black"
             if floor_obj:
-                info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
-                floor_fg_index = info.get("ascii_color", floor_obj.color_pair)
-            floor_base = LEGACY_COLOR_MAP.get(floor_fg_index, "white_on_black")
-            fg_part, bg_part = parse_two_color_names(floor_base)
+                finfo = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+                floor_color_name = finfo.get("color_name", "white_on_black")
 
-            color_name = f"white_on_{bg_part}"
-            attr_bold = get_color_attr(color_name, bold=True)
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            # Player is typically "white" on the floor's background
+            player_color = f"white_on_{bg_floor}"
+            attr_bold = get_color_attr(player_color, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
 
             # If there's a trunk/top in the same tile, it might appear over the player
             objects_list = tile_layers.get(OBJECTS_LAYER, [])
             trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
-            if trunk_tops:
-                for t_obj in trunk_tops:
-                    info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
-                    ch = info.get("ascii_char", t_obj.char)
-                    fg_index = info.get("ascii_color", t_obj.color_pair)
-                    base_col = LEGACY_COLOR_MAP.get(fg_index, "white_on_black")
-                    obj_fg, _ = parse_two_color_names(base_col)
-                    final_col = f"{obj_fg}_on_white"
-                    trunk_attr = get_color_attr(final_col)
-                    safe_addch(self.stdscr, py, px, ch, trunk_attr, clip_borders=True)
+            for t_obj in trunk_tops:
+                info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
+                ch = info.get("ascii_char", t_obj.char)
+                top_color = info.get("color_name", "white_on_black")
+
+                # Overwrite the tile with trunk or top, ignoring player's sprite
+                fg_obj, _ = parse_two_color_names(top_color)
+                final_color = f"{fg_obj}_on_{bg_floor}"
+                trunk_attr = get_color_attr(final_color)
+                safe_addch(self.stdscr, py, px, ch, trunk_attr, clip_borders=True)
 
     def _draw_screen_frame(self):
         draw_screen_frame(self.stdscr)
 
     def _draw_text(self, row, col, text, color_name, bold=False, underline=False):
-        from .curses_highlight import get_color_attr
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)

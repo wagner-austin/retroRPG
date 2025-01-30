@@ -7,10 +7,8 @@ import random
 
 def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
     """
-    Spawns a certain number of rivers (default 1-2).
-    Each river starts on one edge, ends on the opposite edge,
-    follows a path that mixes straight and diagonal movements,
-    and alternates between 3-wide and 1-wide sections.
+    Spawns a certain number of rivers (default 1-2). Each river starts on one
+    edge, ends on the opposite edge, etc.
     """
     river_count = random.randint(min_rivers, max_rivers)
     for _ in range(river_count):
@@ -18,14 +16,8 @@ def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
         path = trace_river_path_improved(start, end, width, height)
         fill_river_alternate_widths(grid, path, width, height)
 
-
 def pick_opposite_edges(width, height):
-    """
-    Pick one edge of the map at random (top, bottom, left, right),
-    then pick the opposite edge, returning (start, end) positions.
-    """
     edge_type = random.randint(0, 3)
-
     if edge_type == 0:
         # top -> bottom
         sx = random.randint(0, width - 1)
@@ -53,14 +45,7 @@ def pick_opposite_edges(width, height):
 
     return (sx, sy), (ex, ey)
 
-
 def trace_river_path_improved(start, end, width, height):
-    """
-    Generates a path from start->end with segments that may be:
-      - Straight moves
-      - Diagonal "over-over-down" or "down-over-over" patterns
-    We'll keep going until we reach or are very close to end.
-    """
     (sx, sy) = start
     (ex, ey) = end
     path = []
@@ -73,19 +58,15 @@ def trace_river_path_improved(start, end, width, height):
     for _ in range(max_steps):
         if (curx, cury) == (ex, ey):
             break
-
         dx = ex - curx
         dy = ey - cury
 
-        # if close to end, just jump there
         if abs(dx) <= 1 and abs(dy) <= 1:
             curx, cury = ex, ey
             path.append((curx, cury))
             break
 
-        # 30% chance to do a diagonal pattern
         do_diagonal = (random.random() < 0.3 and dx != 0 and dy != 0)
-
         if do_diagonal:
             sxn = 1 if dx > 0 else -1
             syn = 1 if dy > 0 else -1
@@ -95,7 +76,6 @@ def trace_river_path_improved(start, end, width, height):
             else:
                 steps = [(0, syn), (sxn, 0), (sxn, 0)]
         else:
-            # straight movement
             if abs(dx) > abs(dy):
                 sxn = 1 if dx > 0 else -1
                 steps = [(sxn, 0)] * random.randint(1, 2)
@@ -103,7 +83,6 @@ def trace_river_path_improved(start, end, width, height):
                 syn = 1 if dy > 0 else -1
                 steps = [(0, syn)] * random.randint(1, 2)
 
-        # apply steps
         for (mx, my) in steps:
             if (curx, cury) == (ex, ey):
                 break
@@ -126,12 +105,12 @@ def trace_river_path_improved(start, end, width, height):
 
     return path
 
-
 def fill_river_alternate_widths(grid, path, width, height):
     """
-    For each index i in the path, if i is even => fill the tile + an extra
-    radius around it (3-wide). If i is odd => fill just the center tile (1-wide).
-    We use water = (' ', 4).
+    For each index i in the path:
+      if i is even => fill the tile + radius around it with water
+      if i is odd  => fill just the center tile
+    We store water as (' ', 'white_on_blue').
     """
     wide_offsets = [
         (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1),
@@ -145,7 +124,7 @@ def fill_river_alternate_widths(grid, path, width, height):
                 nx = x + ox
                 ny = y + oy
                 if 0 <= nx < width and 0 <= ny < height:
-                    grid[ny][nx] = (' ', 4)
+                    grid[ny][nx] = (' ', 'white_on_blue')
         else:
             # 1-wide
-            grid[y][x] = (' ', 4)
+            grid[y][x] = (' ', 'white_on_blue')
