@@ -1,9 +1,8 @@
 # FileName: curses_scene_load.py
-# version: 1.3 (extracted load UI from curses_scene_file_select.py)
+# version: 1.5
 #
 # Summary: Contains the user flow for loading or generating a map.
-#          Now calls the local function select_map_file_load_mode(...) 
-#          for the file-list logic, instead of referencing curses_scene_file_select.
+#          Now "q" or ESC will exit the load scene (instead of 'y').
 #
 # Tags: map, load, scene
 
@@ -13,18 +12,19 @@ import debug
 from procedural_map_generator.generator import generate_procedural_map
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
 from .curses_animations import _draw_art
-from .curses_art_skins import CROCODILE
+from .curses_themes import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_highlight import draw_global_selector_line
 
 from map_list_logic import get_map_list, delete_map_file
+
 
 def load_scene_ui(stdscr):
     """
     The user flow for loading a map or generating a new one.
     Returns either:
       - "" if canceled,
-      - a dict (procedurally generated) if user picks "Generate a new map",
+      - a dict if user picks "Generate a new map",
       - a tuple like ("EDIT", filename) or ("EDIT_GENERATE", data),
       - or just the filename string if user loads an existing map.
     """
@@ -49,7 +49,6 @@ def load_scene_ui(stdscr):
                 return (action_type, actual_map)
 
         elif isinstance(selection, dict):
-            # If for some reason it returned a dict, just return it
             return selection
 
         else:
@@ -112,7 +111,8 @@ def _select_map_file_load_mode(stdscr, files):
                 return "GENERATE"
             else:
                 return files[selected_index]
-        elif key in (ord('q'), ord('y')):
+        elif key in (ord('q'), ord('Q'), 27):
+            # 'q' or ESC => cancel load
             return ""
         elif key == ord('v'):
             debug.toggle_debug()
@@ -149,10 +149,14 @@ def _select_map_file_load_mode(stdscr, files):
 def prompt_delete_confirmation(stdscr, filename):
     """
     Prompt the user: 'Delete X? (y/n)'. Return True if 'y', else False.
+    This is independent from the main 'map leaving' logic, so we keep 'y' here if you wish,
+    or you can also update to 'q' if you want the same approach.
     """
+    from .curses_themes import CURRENT_THEME
+
     max_h, max_w = stdscr.getmaxyx()
-    question = f"Delete '{filename}'? (y/n)"
-    attr = get_color_attr("WHITE_TEXT")
+    question = f"Delete '{filename}'? (y/n)"  # We can keep 'y' for delete confirmation, or change to 'q'.
+    attr = get_color_attr(CURRENT_THEME["confirmation_color"])
 
     row = max_h - 2
     blank_line = " " * (max_w - 4)
@@ -166,6 +170,7 @@ def prompt_delete_confirmation(stdscr, filename):
 
     while True:
         c = stdscr.getch()
+        # If you also want to switch to 'q' for delete, do so here.
         if c in (ord('y'), ord('Y')):
             _restore_input_mode(stdscr)
             return True
@@ -181,12 +186,16 @@ def _draw_load_map_screen(stdscr):
     curses.curs_set(0)
     draw_screen_frame(stdscr)
     draw_title(stdscr, "Load Map", row=1)
-    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
 
+    # Now we use the theme's crocodile art
+    crocodile_lines = CURRENT_THEME["crocodile_art"]
+    _draw_art(stdscr, crocodile_lines, start_row=3, start_col=2)
+
+    # Let instructions default to CURRENT_THEME["instructions_color"]
     instructions = [
         "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=dbg, 'e'=editor"
     ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
+    draw_instructions(stdscr, instructions, from_bottom=3)
 
 
 def _restore_input_mode(stdscr):

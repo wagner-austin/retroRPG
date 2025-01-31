@@ -1,8 +1,9 @@
 # FileName: curses_input.py
 #
-# version: 2.2
+# version: 2.3
 #
 # Summary: A curses-based front-end implementing IGameInput for user interaction.
+#          Updated to remove the 'y' => YES_QUIT logic, so only 'q'/ESC quits.
 #
 # Tags: curses, ui, rendering
 
@@ -34,14 +35,11 @@ class CursesGameInput(IGameInput):
         return actions
 
     def _interpret_key(self, key):
-        # yes-quit
-        if key in (ord('y'), ord('Y')):
-            return "YES_QUIT"
-        # quit => q, Q, ESC
+        # Quit => q, Q, ESC
         if key in (ord('q'), ord('Q'), 27):
             return "QUIT"
 
-        # movement
+        # Movement
         if key in (ord('w'), curses.KEY_UP):
             return "MOVE_UP"
         if key in (ord('s'), curses.KEY_DOWN):
@@ -51,23 +49,23 @@ class CursesGameInput(IGameInput):
         if key in (ord('d'), curses.KEY_RIGHT):
             return "MOVE_RIGHT"
 
-        # editor toggle
+        # Editor toggle
         if key == ord('e'):
             return "EDITOR_TOGGLE"
 
-        # quick-save
+        # Quick-save
         if key == ord('o'):
             return "SAVE_QUICK"
 
-        # debug
+        # Debug
         if key == ord('v'):
             return "DEBUG_TOGGLE"
 
-        # interact
+        # Interact
         if key == ord(' '):
             return "INTERACT"
 
-        # editor keys
+        # Editor keys
         if key == ord('p'):
             return "PLACE_ITEM"
         if key == ord('x'):

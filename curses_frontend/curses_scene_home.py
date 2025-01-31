@@ -11,10 +11,10 @@ import curses
 import debug
 
 from .curses_common import draw_screen_frame, draw_title
-# We still import _draw_art if you want a STATIC display of the ASCII art:
 from .curses_animations import _draw_art
-from .curses_art_skins import MAIN_MENU_ART
 from .curses_highlight import draw_global_selector_line
+from .curses_themes import CURRENT_THEME
+
 
 def home_scene_ui(stdscr):
     """
@@ -28,7 +28,9 @@ def home_scene_ui(stdscr):
     stdscr.keypad(True)
     curses.curs_set(0)
 
-    main_menu_lines = MAIN_MENU_ART  # ASCII lines if you'd like to display them
+    # Grab the ASCII art for the main menu from the current theme
+    main_menu_lines = CURRENT_THEME["main_menu_art"]
+
     menu_lines = [
         "~~~~~~~~~",
         "1) Play",
@@ -102,3 +104,5 @@ def home_scene_ui(stdscr):
                 return 2  # user pressed Esc => Quit
             elif key == ord('v'):
                 debug.toggle_debug()
+
+        frame_count += 1

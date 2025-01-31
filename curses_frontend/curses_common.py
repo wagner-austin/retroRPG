@@ -11,14 +11,15 @@ import debug
 from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, safe_addch, get_color_attr
 
-INSTRUCTION_COLOR_NAME = "UI_MAGENTA"
-BORDER_COLOR_NAME      = "UI_CYAN"
-TITLE_COLOR_NAME       = "UI_WHITE_ON_BLUE"
-TEXT_COLOR_NAME        = "YELLOW_TEXT"
-ART_COLOR_NAME         = "ASCII_ART"
+def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = None) -> None:
+    """
+    Draw a title string at the given row. If color_name is not provided,
+    use CURRENT_THEME's 'title_color'.
+    """
+    from .curses_themes import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["title_color"]
 
-
-def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = TITLE_COLOR_NAME) -> None:
     max_h, max_w = stdscr.getmaxyx()
     if row < 0 or row >= max_h:
         return
@@ -26,10 +27,15 @@ def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str =
     attr = get_color_attr(color_name, bold=True)
     safe_addstr(stdscr, row, col, text, attr, clip_borders=True)
 
-def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int = 2, color_name: str = INSTRUCTION_COLOR_NAME) -> None:
+def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int = 2, color_name: str = None) -> None:
     """
-    Draws a list of instruction lines near the bottom of the screen.
+    Draws a list of instruction lines near the bottom of the screen. 
+    If color_name not provided, use CURRENT_THEME's 'instructions_color'.
     """
+    from .curses_themes import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["instructions_color"]
+
     h, w = stdscr.getmaxyx()
     attr = get_color_attr(color_name)
 
@@ -44,10 +50,15 @@ def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int 
         safe_addstr(stdscr, row, 2, line, attr, clip_borders=True)
         row += 1
 
-def draw_screen_frame(stdscr: curses.window, color_name: str = BORDER_COLOR_NAME) -> None:
+def draw_screen_frame(stdscr: curses.window, color_name: str = None) -> None:
     """
     Draws a rectangular border around the entire screen, plus a "Debug mode" label if debug is enabled.
+    If color_name not provided, use CURRENT_THEME's 'border_color'.
     """
+    from .curses_themes import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["border_color"]
+
     h, w = stdscr.getmaxyx()
     border_attr = get_color_attr(color_name)
 

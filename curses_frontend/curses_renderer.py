@@ -1,5 +1,5 @@
 # FileName: curses_renderer.py
-# version: 3.8 (updated to remove camera logic)
+# version: 3.8
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer,
 #          with partial scrolling as a rendering optimization only.
@@ -10,13 +10,13 @@
 import curses
 import debug
 
-# Note: 'IGameRenderer' is now in engine_interfaces.py
 from engine_interfaces import IGameRenderer
 
 from .curses_color_init import init_colors
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
+from .curses_themes import CURRENT_THEME
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 
@@ -34,11 +34,6 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.nodelay(True)
         self.stdscr.keypad(True)
         curses.curs_set(0)
-        init_colors()
-
-    ########################################################################
-    # 1) LAYERED SCENE RENDERING
-    ########################################################################
 
     def render_scene(self, model, scene_layers):
         """
@@ -59,18 +54,16 @@ class CursesGameRenderer(IGameRenderer):
 
     def _render_layer(self, layer_name, model):
         """
-        Actually draw the requested layer_name. For demonstration, we do placeholders.
+        Actually draw the requested layer_name.
         """
         if layer_name == "background":
-            draw_screen_frame(self.stdscr, "UI_CYAN")
+            # Use the theme's border color when drawing the frame
+            border_col = CURRENT_THEME["border_color"]
+            draw_screen_frame(self.stdscr, border_col)
 
         elif layer_name == "game_world":
             if model:
                 self._full_redraw(model)
-
-    ########################################################################
-    # 2) CLASSIC GAME RENDERING (used during normal gameplay)
-    ########################################################################
 
     def render(self, model):
         # Decide if we can do partial scrolling in Y direction
@@ -88,16 +81,12 @@ class CursesGameRenderer(IGameRenderer):
             else:
                 self._update_dirty_tiles(model)
 
-        # Reset the scroll deltas after we have rendered this frame
+        # Reset the scroll deltas
         model.ui_scroll_dx = 0
         model.ui_scroll_dy = 0
 
         self.stdscr.noutrefresh()
         curses.doupdate()
-
-    ########################################################################
-    # 3) INTERNAL RENDERING FUNCTIONS
-    ########################################################################
 
     def _partial_scroll(self, dy, model):
         """
@@ -124,8 +113,6 @@ class CursesGameRenderer(IGameRenderer):
             model.full_redraw_needed = True
 
         self.stdscr.setscrreg(0, max_h - 1)
-
-        # We still need to refresh the newly exposed row
         self._update_dirty_tiles(model)
 
     def _full_redraw(self, model):
@@ -135,19 +122,18 @@ class CursesGameRenderer(IGameRenderer):
         # Show either editor info or player's inventory
         if model.context.enable_editor_commands and model.editor_scenery_list:
             sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
-            self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}", "WHITE_TEXT")
+            self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
         else:
             inv_text = (
                 f"Inventory: Gold={model.player.gold}, "
                 f"Wood={model.player.wood}, Stone={model.player.stone}"
             )
-            self._draw_text(1, 2, inv_text, "WHITE_TEXT")
+            self._draw_text(1, 2, inv_text)
 
         max_h, max_w = self.stdscr.getmaxyx()
         visible_cols = max_w
         visible_rows = max_h - self.map_top_offset
 
-        # Mark everything visible as dirty
         for wx in range(model.camera_x, min(model.camera_x + visible_cols, model.world_width)):
             for wy in range(model.camera_y, min(model.camera_y + visible_rows, model.world_height)):
                 model.dirty_tiles.add((wx, wy))
@@ -193,7 +179,7 @@ class CursesGameRenderer(IGameRenderer):
             ch = info.get("ascii_char", obj.char)
             obj_color_name = info.get("color_name", "white_on_black")
 
-            # If it's specifically TreeTop on the player's tile, we handle later
+            # If it's specifically TreeTop on the player's tile, handle later
             if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
                 continue
 
@@ -238,6 +224,11 @@ class CursesGameRenderer(IGameRenderer):
     def _draw_screen_frame(self):
         draw_screen_frame(self.stdscr)
 
-    def _draw_text(self, row, col, text, color_name, bold=False, underline=False):
+    def _draw_text(self, row, col, text, color_name=None, bold=False, underline=False):
+        """
+        Draw text at (row, col). If no color_name given, use CURRENT_THEME["text_color"].
+        """
+        if color_name is None:
+            color_name = CURRENT_THEME["text_color"]
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)

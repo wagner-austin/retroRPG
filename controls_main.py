@@ -1,8 +1,10 @@
 # FileName: controls_main.py
-# version: 2.15
+# version: 2.16
+#
 # Summary: Interprets user input actions for both play and editor modes.
 #          No direct curses usage. We rely on action strings from IGameInput.
 #          UI calls (quick save, yes/no prompts) are delegated to controls_ui.py.
+#
 # Tags: controls, input, main
 
 import time
@@ -20,7 +22,7 @@ from curses_frontend.curses_controls_ui import perform_quick_save, prompt_yes_no
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
     Handle actions that apply to BOTH play and editor modes:
-      - YES_QUIT => user pressed 'y' after a quit prompt
+      - QUIT => user pressed 'q' to leave the map
       - SAVE_QUICK => quick save
       - MOVE_UP / MOVE_DOWN / MOVE_LEFT / MOVE_RIGHT => movement
       - DEBUG_TOGGLE => toggles debug
@@ -34,14 +36,14 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
 
     # ACTION HANDLERS:
 
-    if action == "YES_QUIT":
-        # "YES_QUIT" typically means user confirmed they want to quit
+    if action == "QUIT":
+        # The user pressed 'q' to leave the map.
+        # If we have a filename, quick-save directly.
         if model.loaded_map_filename:
-            # If we have a filename, quick-save directly to that file
             perform_quick_save(model, renderer)
             should_quit = True
         else:
-            # For a generated map with no filename, prompt to save
+            # For a generated map with no filename, prompt to save first:
             save_decision = prompt_yes_no(renderer, "Save this generated map? (y/n)")
             if save_decision:
                 perform_quick_save(model, renderer)

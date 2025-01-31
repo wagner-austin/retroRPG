@@ -1,5 +1,5 @@
 # FileName: curses_scene_save.py
-# version: 1.5 (merged with file_select bridging; removed curses_scene_file_select.py)
+# version: 1.6
 #
 # Summary: Contains all save-scene logic for picking/creating filenames,
 #          prompting for overwrites, and storing map data.
@@ -15,7 +15,7 @@ from map_list_logic import file_exists_in_maps_dir, get_map_list
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
 from .curses_animations import _draw_art
-from .curses_art_skins import CROCODILE
+from .curses_themes import CURRENT_THEME
 
 
 def select_map_file(stdscr, mode='save'):
@@ -43,33 +43,36 @@ def select_map_file_save_mode(stdscr, files):
       - a filename string (chosen from the list)
       - "" if canceled
     """
+    from .curses_themes import CURRENT_THEME
+
     while True:
         _draw_save_map_screen(stdscr)
         max_h, max_w = stdscr.getmaxyx()
         row = 10
 
-        attr_cyan = get_color_attr("UI_CYAN")
-        attr_yellow = get_color_attr("YELLOW_TEXT")
+        # Instead of hard-coded "UI_CYAN"/"YELLOW_TEXT", use the theme:
+        attr_prompt = get_color_attr(CURRENT_THEME["prompt_color"])
+        attr_menu_item = get_color_attr(CURRENT_THEME["menu_item_color"])
 
         if files:
             safe_addstr(
                 stdscr, row, 2,
                 "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:",
-                attr_cyan, clip_borders=True
+                attr_prompt, clip_borders=True
             )
             row += 1
 
             for i, filename in enumerate(files, start=1):
                 if row >= max_h - 1:
                     break
-                safe_addstr(stdscr, row, 2, f"{i}. {filename}", attr_yellow, clip_borders=True)
+                safe_addstr(stdscr, row, 2, f"{i}. {filename}", attr_menu_item, clip_borders=True)
                 row += 1
 
             if row < max_h - 1:
                 safe_addstr(
                     stdscr, row, 2,
                     "Enter choice or press Enter to cancel:",
-                    attr_cyan, clip_borders=True
+                    attr_prompt, clip_borders=True
                 )
                 row += 1
         else:
@@ -77,7 +80,7 @@ def select_map_file_save_mode(stdscr, files):
             safe_addstr(
                 stdscr, row, 2,
                 "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
-                attr_cyan, clip_borders=True
+                attr_prompt, clip_borders=True
             )
             row += 1
 
@@ -120,25 +123,6 @@ def select_map_file_save_mode(stdscr, files):
                 return files[idx]
 
 
-def _draw_save_map_screen(stdscr):
-    """
-    Draws the "Save Map" header/art/instructions at the top.
-    """
-    stdscr.clear()
-    stdscr.nodelay(False)
-    stdscr.keypad(True)
-    curses.curs_set(0)
-
-    draw_screen_frame(stdscr)
-    draw_title(stdscr, "Save Map", row=1)
-    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
-
-    instructions = [
-        "Select a map to overwrite, 'n'=new, ENTER=cancel, 'v'=toggle debug"
-    ]
-    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
-
-
 def prompt_for_filename(stdscr, prompt):
     """
     Prompt user for a new filename (used by the save flow).
@@ -152,7 +136,10 @@ def prompt_for_filename(stdscr, prompt):
 
     row = 10
     if row < max_h - 1:
-        attr = get_color_attr("UI_CYAN")
+        # Use the theme's prompt_color for the prompt text
+        from .curses_themes import CURRENT_THEME
+        attr = get_color_attr(CURRENT_THEME["prompt_color"])
+
         safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
         stdscr.refresh()
 
@@ -178,7 +165,7 @@ def save_map_ui(stdscr,
     The user flow for saving a map. Potentially prompts for a filename or overwriting.
     If filename_override is given, skip the selection and use that name directly.
     Otherwise:
-      1) We show a "save" list of existing files (via select_map_file(..., mode='save')).
+      1) Show a "save" list of existing files (via select_map_file(..., mode='save')).
       2) User can pick a file to overwrite or type 'n' for new => new filename prompt.
       3) If user cancels at any point, we just return.
     """
@@ -217,6 +204,29 @@ def save_map_ui(stdscr,
     # If we overwrote an existing file and want a brief pause:
     if file_existed and notify_overwrite:
         curses.napms(0)
+
+
+def _draw_save_map_screen(stdscr):
+    """
+    Draws the "Save Map" header/art/instructions at the top.
+    """
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Save Map", row=1)
+
+    # Use the theme's crocodile art
+    crocodile_lines = CURRENT_THEME["crocodile_art"]
+    _draw_art(stdscr, crocodile_lines, start_row=3, start_col=2)
+
+    # Let instructions default to CURRENT_THEME["instructions_color"]
+    instructions = [
+        "Select a map to overwrite, 'n'=new, ENTER=cancel, 'v'=toggle debug"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3)
 
 
 def _restore_input_mode(stdscr):

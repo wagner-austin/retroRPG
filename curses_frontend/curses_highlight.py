@@ -9,16 +9,27 @@
 import curses
 from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, get_color_attr
+from .curses_themes import CURRENT_THEME
 
 GLOBAL_HIGHLIGHT_CONFIG = {
-    "selected_color_name":   "YELLOW_TEXT",
-    "unselected_color_name": "WHITE_TEXT",
+    # We set them to None; we will fetch from CURRENT_THEME at runtime.
+    "selected_color_name":   None,
+    "unselected_color_name": None,
     "effect_name":           "REVERSE_BLINK",
     "speed_factor":          5,
 }
 
 def get_global_selector_config():
-    return GLOBAL_HIGHLIGHT_CONFIG
+    """
+    Returns the global highlight config, filling in selected/unselected
+    color names from the CURRENT_THEME if they are None.
+    """
+    config = GLOBAL_HIGHLIGHT_CONFIG.copy()
+    if config["selected_color_name"] is None:
+        config["selected_color_name"] = CURRENT_THEME["highlight_selected_color"]
+    if config["unselected_color_name"] is None:
+        config["unselected_color_name"] = CURRENT_THEME["highlight_unselected_color"]
+    return config
 
 def get_selector_effect_attrs(effect="REVERSE_BLINK", frame=0, speed_factor=10) -> int:
     toggle_state = (frame // speed_factor) % 2

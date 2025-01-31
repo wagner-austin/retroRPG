@@ -68,11 +68,3 @@ CROCODILE = [
     "  \\ ' `_  '`_    _    ',/ _::_::_ \\ _    _/ _::_::_ \\   `.,'.,`., \\-,-,-,_,_,",
     "   `'~~ `'~~ `'~~ `'~~  \\_)(_)(_)/  `~~' \\_)(*)(*)/ ~'`\\*..*,.*,'*;*;*;*;*;"
 ]
-
-DEFAULT_SKIN = {
-    "main_menu_art": MAIN_MENU_ART,
-    "border_color":  "UI_CYAN",
-    "title_color":   "UI_WHITE_ON_BLUE",
-}
-
-CURRENT_SKIN = DEFAULT_SKIN
