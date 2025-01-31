@@ -17,16 +17,6 @@ TITLE_COLOR_NAME       = "UI_WHITE_ON_BLUE"
 TEXT_COLOR_NAME        = "YELLOW_TEXT"
 ART_COLOR_NAME         = "ASCII_ART"
 
-UI_FONT_CONFIG = {
-    "font_color_name": TEXT_COLOR_NAME,
-    "font_size": None,
-    "font_type": None,
-}
-
-def set_ui_font_config(**kwargs):
-    for key, val in kwargs.items():
-        if key in UI_FONT_CONFIG:
-            UI_FONT_CONFIG[key] = val
 
 def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = TITLE_COLOR_NAME) -> None:
     max_h, max_w = stdscr.getmaxyx()

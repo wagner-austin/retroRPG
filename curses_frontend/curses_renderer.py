@@ -1,15 +1,19 @@
 # FileName: curses_renderer.py
-# version: 3.6
+# version: 3.8 (updated to remove camera logic)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer,
-#          plus a new layered render_scene(...) approach for menus or overlays.
+#          with partial scrolling as a rendering optimization only.
+#          No camera or game logic in this file.
 #
 # Tags: curses, ui, rendering
 
 import curses
 import debug
-from interfaces import IGameRenderer
-from .curses_color_init import init_colors, color_pairs
+
+# Note: 'IGameRenderer' is now in engine_interfaces.py
+from engine_interfaces import IGameRenderer
+
+from .curses_color_init import init_colors
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
@@ -18,9 +22,9 @@ from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 
 class CursesGameRenderer(IGameRenderer):
     """
-    Implements IGameRenderer using curses: handles rendering the game world,
-    partial or full redraw, etc. Also provides a 'render_scene(...)' method
-    to draw layered scenes (menus, overlays).
+    Implements IGameRenderer using curses: strictly drawing logic only.
+    Partial scrolling is done as a rendering optimization if the camera
+    has moved by exactly +1 or -1 row. No camera logic here.
     """
 
     def __init__(self, stdscr):
@@ -33,7 +37,7 @@ class CursesGameRenderer(IGameRenderer):
         init_colors()
 
     ########################################################################
-    # 1) NEW: LAYERED SCENE RENDERING
+    # 1) LAYERED SCENE RENDERING
     ########################################################################
 
     def render_scene(self, model, scene_layers):
@@ -64,74 +68,65 @@ class CursesGameRenderer(IGameRenderer):
             if model:
                 self._full_redraw(model)
 
-        # Additional layers could be here:
-        # elif layer_name == "menu_overlay": ...
-        # etc.
-
     ########################################################################
     # 2) CLASSIC GAME RENDERING (used during normal gameplay)
     ########################################################################
 
     def render(self, model):
+        # Decide if we can do partial scrolling in Y direction
+        dx = getattr(model, "ui_scroll_dx", 0)
+        dy = getattr(model, "ui_scroll_dy", 0)
+
         if model.full_redraw_needed:
             self._full_redraw(model)
             model.full_redraw_needed = False
         else:
-            self._update_dirty_tiles(model)
+            # If camera moved exactly ±1 row in Y (and no X movement),
+            # we try partial scroll. Otherwise, just update dirty tiles.
+            if dx == 0 and abs(dy) == 1:
+                self._partial_scroll(dy, model)
+            else:
+                self._update_dirty_tiles(model)
+
+        # Reset the scroll deltas after we have rendered this frame
+        model.ui_scroll_dx = 0
+        model.ui_scroll_dy = 0
 
         self.stdscr.noutrefresh()
         curses.doupdate()
 
-    def on_camera_move(self, dx, dy, model):
-        if abs(dx) > 0 or abs(dy) > 1:
-            model.full_redraw_needed = True
-            return
+    ########################################################################
+    # 3) INTERNAL RENDERING FUNCTIONS
+    ########################################################################
 
+    def _partial_scroll(self, dy, model):
+        """
+        Curses-specific partial scrolling optimization when camera moves by ±1 row.
+        """
         max_h, max_w = self.stdscr.getmaxyx()
         self.stdscr.setscrreg(self.map_top_offset, max_h - 1)
 
         try:
             if dy == 1:
+                # Scrolling down -> camera moved up by 1
                 self.stdscr.scroll(1)
                 new_row = model.camera_y + (max_h - self.map_top_offset) - 1
                 for col in range(model.camera_x, model.camera_x + max_w):
                     model.dirty_tiles.add((col, new_row))
             elif dy == -1:
+                # Scrolling up -> camera moved down by 1
                 self.stdscr.scroll(-1)
                 new_row = model.camera_y
                 for col in range(model.camera_x, model.camera_x + max_w):
                     model.dirty_tiles.add((col, new_row))
+
         except curses.error:
             model.full_redraw_needed = True
 
         self.stdscr.setscrreg(0, max_h - 1)
 
-    def prompt_yes_no(self, question: str) -> bool:
-        """
-        A simple curses-based yes/no prompt at the bottom row, returning bool.
-        """
-        max_h, max_w = self.stdscr.getmaxyx()
-        row = max_h - 2
-        safe_addstr(self.stdscr, row, 0, " " * (max_w - 1), 0, clip_borders=False)
-        safe_addstr(self.stdscr, row, 2, question, 0, clip_borders=False)
-        self.stdscr.refresh()
-
-        self.stdscr.nodelay(False)
-        while True:
-            c = self.stdscr.getch()
-            if c in (ord('y'), ord('Y')):
-                self.stdscr.nodelay(True)
-                return True
-            elif c in (ord('n'), ord('N'), ord('q'), 27):
-                self.stdscr.nodelay(True)
-                return False
-
-    def get_curses_window(self):
-        return self.stdscr
-
-    ########################################################################
-    # 3) INTERNAL GAME RENDER UTILS
-    ########################################################################
+        # We still need to refresh the newly exposed row
+        self._update_dirty_tiles(model)
 
     def _full_redraw(self, model):
         self.stdscr.clear()
@@ -152,6 +147,7 @@ class CursesGameRenderer(IGameRenderer):
         visible_cols = max_w
         visible_rows = max_h - self.map_top_offset
 
+        # Mark everything visible as dirty
         for wx in range(model.camera_x, min(model.camera_x + visible_cols, model.world_width)):
             for wy in range(model.camera_y, min(model.camera_y + visible_rows, model.world_height)):
                 model.dirty_tiles.add((wx, wy))
@@ -170,7 +166,6 @@ class CursesGameRenderer(IGameRenderer):
         self._draw_player_on_top(model)
 
     def _draw_single_tile(self, wx, wy, sx, sy, model):
-        # clear background first
         blank_attr = get_color_attr("white_on_black")
         safe_addch(self.stdscr, sy, sx, " ", blank_attr, clip_borders=True)
 
@@ -188,25 +183,21 @@ class CursesGameRenderer(IGameRenderer):
             floor_attr = get_color_attr(floor_color_name)
             safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
 
-        # Now draw objects, items, entities on top
-        # Each object gets the floor's background but overrides the foreground
-        obj_list = tile_layers.get(OBJECTS_LAYER, [])
-        obj_list += tile_layers.get(ITEMS_LAYER, [])
-        obj_list += tile_layers.get(ENTITIES_LAYER, [])
+        # Objects, items, entities
+        obj_list = tile_layers.get(OBJECTS_LAYER, []) + \
+                   tile_layers.get(ITEMS_LAYER, []) + \
+                   tile_layers.get(ENTITIES_LAYER, [])
 
         for obj in obj_list:
-            # if it's a tree trunk or top in player's tile, we might skip drawing over them later
             info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
             ch = info.get("ascii_char", obj.char)
             obj_color_name = info.get("color_name", "white_on_black")
 
-            # If it's specifically TreeTop on the player's tile, we do special logic later.
+            # If it's specifically TreeTop on the player's tile, we handle later
             if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
                 continue
 
-            # Parse floor color to get background
             fg_floor, bg_floor = parse_two_color_names(floor_color_name)
-            # Parse object color to get foreground
             fg_obj, _ = parse_two_color_names(obj_color_name)
             final_color = f"{fg_obj}_on_{bg_floor}"
             attr = get_color_attr(final_color)
@@ -219,7 +210,6 @@ class CursesGameRenderer(IGameRenderer):
         max_h, max_w = self.stdscr.getmaxyx()
 
         if 0 <= px < max_w and 0 <= py < max_h:
-            # Get floor color at player's tile
             tile_layers = model.placed_scenery.get((model.player.x, model.player.y), {})
             floor_obj = tile_layers.get(FLOOR_LAYER)
             floor_color_name = "white_on_black"
@@ -228,12 +218,11 @@ class CursesGameRenderer(IGameRenderer):
                 floor_color_name = finfo.get("color_name", "white_on_black")
 
             fg_floor, bg_floor = parse_two_color_names(floor_color_name)
-            # Player is typically "white" on the floor's background
             player_color = f"white_on_{bg_floor}"
             attr_bold = get_color_attr(player_color, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
 
-            # If there's a trunk/top in the same tile, it might appear over the player
+            # Overwrite with trunk/top if present
             objects_list = tile_layers.get(OBJECTS_LAYER, [])
             trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
             for t_obj in trunk_tops:
@@ -241,7 +230,6 @@ class CursesGameRenderer(IGameRenderer):
                 ch = info.get("ascii_char", t_obj.char)
                 top_color = info.get("color_name", "white_on_black")
 
-                # Overwrite the tile with trunk or top, ignoring player's sprite
                 fg_obj, _ = parse_two_color_names(top_color)
                 final_color = f"{fg_obj}_on_{bg_floor}"
                 trunk_attr = get_color_attr(final_color)
