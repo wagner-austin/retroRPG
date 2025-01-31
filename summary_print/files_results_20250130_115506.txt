@@ -1,0 +1,2748 @@
+
+# FileName: __init__.py
+#
+# version: 1.0
+#
+# Summary: Marks this directory as a Python package for curses-based front-end.
+#
+# Tags: package, curses
+
+"""
+Package for all curses-based front-end modules:
+ - curses_input
+ - curses_renderer
+ - curses_menus
+ - curses_map_ui
+ - curses_common (shared drawing helpers)
+ - curses_animations
+ - curses_highlight
+ - curses_art_skins
+ - curses_utils
+ - curses_color_init
+"""
+
+
+# FileName: curses_animations.py
+#
+# version: 2.0
+#
+# Summary: Houses drawing routines for sprite/scene animations (ASCII art, borders),
+#          plus the subtle ASCII art shifting from the old animator_main.py.
+#
+# Tags: animation, drawing, curses
+
+import time
+import curses
+import debug
+from .curses_utils import safe_addstr, safe_addch, get_color_attr
+from .curses_common import draw_screen_frame
+from .curses_art_skins import DECORATION
+
+def animate_art_subtle(stdscr, art_lines, title_text=None, max_shift=2, frame_delay_ms=50, shift_delay_frames=20):
+    """
+    Slowly shifts ASCII art left/right by ±max_shift columns, pausing shift_delay_frames frames
+    between each shift. Press 'q'/'Q' or ESC to exit. Press 'v' to toggle debug.
+    
+    :param stdscr: The curses screen
+    :param art_lines: list of strings for the ASCII art
+    :param title_text: optional string displayed at row=1, col=2
+    :param max_shift: maximum shift in columns (default 2)
+    :param frame_delay_ms: time to sleep each frame, in milliseconds (default 50)
+    :param shift_delay_frames: how many frames to wait before reversing shift direction
+    """
+    stdscr.nodelay(True)
+    curses.curs_set(0)
+
+    offset_x = -2
+    direction = -1
+    frame_count = 0
+
+    while True:
+        stdscr.erase()
+        draw_screen_frame(stdscr)
+
+        # If given, display some title text
+        if title_text:
+            try:
+                safe_addstr(stdscr, 1, 2, title_text, get_color_attr("WHITE_TEXT"), clip_borders=False)
+            except curses.error:
+                pass
+
+        # Render art offset by offset_x
+        _draw_art(stdscr, art_lines, start_row=3, start_col=2 + offset_x)
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+        key = stdscr.getch()
+        if key in (ord('q'), ord('Q'), 27):
+            break
+        elif key == ord('v'):
+            debug.toggle_debug()
+
+        frame_count += 1
+        if frame_count % shift_delay_frames == 0:
+            offset_x += direction
+            if offset_x >= max_shift:
+                offset_x = max_shift
+                direction = -1
+            elif offset_x <= -max_shift:
+                offset_x = -max_shift
+                direction = 1
+
+        # Use time.sleep for frame delay (instead of curses.napms).
+        time.sleep(frame_delay_ms / 1000.0)
+
+
+def _draw_art(stdscr, art_lines, start_row=1, start_col=2, color_name="ASCII_ART"):
+    """
+    Renders 'art_lines' at (start_row, start_col), using a specified color_name.
+    """
+    attr = get_color_attr(color_name)
+    max_h, max_w = stdscr.getmaxyx()
+    row = start_row
+    for line in art_lines:
+        if row >= max_h - 1:
+            break
+        safe_addstr(stdscr, row, start_col, line, attr, clip_borders=True)
+        row += 1
+
+
+#def draw_border_old(stdscr, color_name="UI_CYAN"):
+#    """
+#    DEPRECATED: We keep this for reference, but prefer using 'draw_screen_frame' from curses_common.
+#    """
+#    draw_screen_frame(stdscr, color_name)
+
+
+# FileName: curses_art_skins.py
+#
+# version: 1.2
+#
+# Summary: Stores ASCII art or special graphics needed for titles, load screens, or decorative UI elements.
+#
+# Tags: art, ui
+
+HEADER_ART = [
+    "=== HEADER ART PLACEHOLDER ===",
+    "You can replace this with your own artwork."
+]
+
+LOADING_ART = [
+    "--- LOADING ART PLACEHOLDER ---",
+    "You can replace this with your own artwork."
+]
+
+HOMESCREEN_ART = [
+    "::: HOMESCREEN ART PLACEHOLDER :::",
+    "You can replace this with your own artwork."
+]
+
+DECORATION = [
+    "... DECORATION PLACEHOLDER ...",
+    "You can replace this with your own artwork."
+]
+
+BANNER = [
+    "~~~ BANNER PLACEHOLDER ~~~"
+]
+
+BORDERS = [
+    "+++ BORDERS PLACEHOLDER +++"
+]
+
+MAIN_MENU_ART = [
+    "     .       +  ':.  .      *              '            *  '",
+    "                  '::._                                      ",
+    "                    '._)                 * +              ' ",
+    "                          .              .        |         ",
+    "           .      o.               +            - o -.      ",
+    " o'          '    .    /  .         o             |         ",
+    "    .  *   '          /                         +           ",
+    "   .                 *          '                      .    ",
+    "                 .             .             .  .           ",
+    "   *         .   .       .                   | '.           ",
+    "  +          '+                .           - o -            ",
+    "          .                                . |              ",
+    "            '  '     ..                   +  .  . +.        ",
+    "  .                              |          .-.             ",
+    " '                 .'  * '     - o -         ) )            ",
+    " +        '   .                   |          '-´         '  ",
+    "                       +      .'                   '.       ",
+    " .           .           o      .       . .      .          ",
+    "                       '       . +~~                       .",
+]
+
+CROCODILE = [
+    "                _ ___                /^^\\ /^\\  /^^\\*",
+    "    _          *@)@) \\            ,,/ '`~`'~~ ', `\\.",
+    "  _/o\\_ _ _ _/~`.`...'~\\        ./~~..,'`','',.,' '  ~:",
+    " / `','.~,~.~  .   , . , ~|,   ,/ .,' , ,. .. ,,.   `,  ~\\*",
+    "( ' *' _ '*`_  '  .    ,`\\*/ .' ..' '  `  `   `..  `,   \\*",
+    "  V~ V~ V~ ~\\ `   ' .  '    , ' .,.,''`.,.''`.,.``. ',   \\_",
+    "  _/\\ /\\ /\\ /\\_/, . ' ,   `*/\\_ `. `. '.,  \\*",
+    "< ~ ~ '~`'~'`, .,  .   `_: ::: \\_ '      `*/ ::: \\_ `.,' . ',  \\_",
+    "  \\ ' `_  '`_    _    ',/ _::_::_ \\ _    _/ _::_::_ \\   `.,'.,`., \\-,-,-,_,_,",
+    "   `'~~ `'~~ `'~~ `'~~  \\_)(_)(_)/  `~~' \\_)(*)(*)/ ~'`\\*..*,.*,'*;*;*;*;*;"
+]
+
+DEFAULT_SKIN = {
+    "main_menu_art": MAIN_MENU_ART,
+    "border_color":  "UI_CYAN",
+    "title_color":   "UI_WHITE_ON_BLUE",
+}
+
+CURRENT_SKIN = DEFAULT_SKIN
+
+
+# FileName: curses_color_init.py
+#
+# version: 3.3
+#
+# Summary: Initializes curses color pairs. Skips invalid indexes if terminal supports fewer colors.
+#
+# Tags: colors, curses, setup
+
+import curses
+
+# The standard 8 curses colors mapped to friendly names:
+BASE_COLORS = {
+    "black":   curses.COLOR_BLACK,
+    "red":     curses.COLOR_RED,
+    "green":   curses.COLOR_GREEN,
+    "yellow":  curses.COLOR_YELLOW,
+    "blue":    curses.COLOR_BLUE,
+    "magenta": curses.COLOR_MAGENTA,
+    "cyan":    curses.COLOR_CYAN,
+    "white":   curses.COLOR_WHITE,
+}
+
+# Extended color indexes for e.g. light_gray, dark_gray, etc.
+EXTENDED_COLORS = {
+    "light_gray": 8,
+    "dark_gray":  9,
+    # Could add more if terminal supports it.
+}
+
+def define_extended_colors():
+    """Attempt to initialize extra colors if the terminal supports color redefinition."""
+    if not curses.can_change_color():
+        return
+    # light_gray => ~70% white
+    curses.init_color(8, 700, 700, 700)
+    # dark_gray  => ~30% white
+    curses.init_color(9, 300, 300, 300)
+
+color_pairs = {}
+
+def init_colors():
+    curses.start_color()
+    curses.use_default_colors()
+
+    # Attempt to define extended colors if supported
+    define_extended_colors()
+
+    # Merge base + extended
+    all_colors = dict(BASE_COLORS)
+    all_colors.update(EXTENDED_COLORS)
+
+    pair_index = 1
+    for fg_name, fg_val in all_colors.items():
+        for bg_name, bg_val in all_colors.items():
+            if fg_val < curses.COLORS and bg_val < curses.COLORS:
+                pair_name = f"{fg_name}_on_{bg_name}"
+                curses.init_pair(pair_index, fg_val, bg_val)
+                color_pairs[pair_name] = pair_index
+                pair_index += 1
+
+    # Create alias names for legacy references
+    ALIAS_MAP = {
+        "WHITE_TEXT":        "white_on_black",
+        "UI_CYAN":           "cyan_on_black",
+        "UI_MAGENTA":        "magenta_on_black",
+        "UI_WHITE_ON_BLUE":  "white_on_blue",
+        "YELLOW_TEXT":       "yellow_on_black",
+        "ASCII_ART":         "white_on_black",
+        "TREE_TOP":          "green_on_black",
+        "ROCK":              "white_on_black",
+        "RIVER":             "white_on_blue",
+        "GRASS":             "white_on_green",
+        "PATH":              "black_on_yellow",
+    }
+
+    for alias_name, real_name in ALIAS_MAP.items():
+        if real_name in color_pairs:
+            color_pairs[alias_name] = color_pairs[real_name]
+        else:
+            color_pairs[alias_name] = color_pairs.get("white_on_black", 0)
+
+
+# FileName: curses_common.py
+#
+# version: 2.9
+#
+# Summary: Provides functions and helpers for drawing frames, labels, etc. in curses.
+#
+# Tags: ui, rendering, curses
+
+import curses
+import debug
+from .curses_color_init import color_pairs
+from .curses_utils import safe_addstr, safe_addch, get_color_attr
+
+INSTRUCTION_COLOR_NAME = "UI_MAGENTA"
+BORDER_COLOR_NAME      = "UI_CYAN"
+TITLE_COLOR_NAME       = "UI_WHITE_ON_BLUE"
+TEXT_COLOR_NAME        = "YELLOW_TEXT"
+ART_COLOR_NAME         = "ASCII_ART"
+
+UI_FONT_CONFIG = {
+    "font_color_name": TEXT_COLOR_NAME,
+    "font_size": None,
+    "font_type": None,
+}
+
+def set_ui_font_config(**kwargs):
+    for key, val in kwargs.items():
+        if key in UI_FONT_CONFIG:
+            UI_FONT_CONFIG[key] = val
+
+def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = TITLE_COLOR_NAME) -> None:
+    max_h, max_w = stdscr.getmaxyx()
+    if row < 0 or row >= max_h:
+        return
+    col = 2
+    attr = get_color_attr(color_name, bold=True)
+    safe_addstr(stdscr, row, col, text, attr, clip_borders=True)
+
+def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int = 2, color_name: str = INSTRUCTION_COLOR_NAME) -> None:
+    """
+    Draws a list of instruction lines near the bottom of the screen.
+    """
+    h, w = stdscr.getmaxyx()
+    attr = get_color_attr(color_name)
+
+    start_row = h - from_bottom - len(lines)
+    if start_row < 1:
+        start_row = 1
+
+    row = start_row
+    for line in lines:
+        if row >= h - 1:
+            break
+        safe_addstr(stdscr, row, 2, line, attr, clip_borders=True)
+        row += 1
+
+def draw_screen_frame(stdscr: curses.window, color_name: str = BORDER_COLOR_NAME) -> None:
+    """
+    Draws a rectangular border around the entire screen, plus a "Debug mode" label if debug is enabled.
+    """
+    h, w = stdscr.getmaxyx()
+    border_attr = get_color_attr(color_name)
+
+    # Top line
+    for x in range(w):
+        safe_addch(stdscr, 0, x, curses.ACS_HLINE, border_attr, clip_borders=False)
+    safe_addch(stdscr, 0, 0, curses.ACS_ULCORNER, border_attr, clip_borders=False)
+    safe_addch(stdscr, 0, w - 1, curses.ACS_URCORNER, border_attr, clip_borders=False)
+
+    # Bottom line
+    for x in range(w):
+        safe_addch(stdscr, h - 1, x, curses.ACS_HLINE, border_attr, clip_borders=False)
+    safe_addch(stdscr, h - 1, 0, curses.ACS_LLCORNER, border_attr, clip_borders=False)
+    safe_addch(stdscr, h - 1, w - 1, curses.ACS_LRCORNER, border_attr, clip_borders=False)
+
+    # Left/right
+    for y in range(1, h - 1):
+        safe_addch(stdscr, y, 0, curses.ACS_VLINE, border_attr, clip_borders=False)
+        safe_addch(stdscr, y, w - 1, curses.ACS_VLINE, border_attr, clip_borders=False)
+
+    # Debug label
+    if debug.DEBUG_CONFIG["enabled"]:
+        label = "Debug mode: On"
+        col = w - len(label) - 2
+        dbg_attr = get_color_attr("WHITE_TEXT")
+        safe_addstr(stdscr, 0, col, label, dbg_attr, clip_borders=False)
+
+def draw_text(stdscr: curses.window, row: int, col: int, text: str,
+              fg: str = "white", bg: str = "black",
+              bold: bool = False, underline: bool = False) -> None:
+    """
+    Draw text at (row, col) with direct FG_on_BG approach.
+    """
+    from .curses_utils import parse_two_color_names
+    pair_name = f"{fg}_on_{bg}"
+    attr = get_color_attr(pair_name, bold=bold, underline=underline)
+    safe_addstr(stdscr, row, col, text, attr, clip_borders=True)
+
+
+# FileName: curses_highlight.py
+#
+# version: 1.4
+#
+# Summary: Provides a single, globally configurable highlight/selector system.
+#
+# Tags: selector, highlight, effects
+
+import curses
+from .curses_color_init import color_pairs
+from .curses_utils import safe_addstr, get_color_attr
+
+GLOBAL_HIGHLIGHT_CONFIG = {
+    "selected_color_name":   "YELLOW_TEXT",
+    "unselected_color_name": "WHITE_TEXT",
+    "effect_name":           "REVERSE_BLINK",
+    "speed_factor":          5,
+}
+
+def get_global_selector_config():
+    return GLOBAL_HIGHLIGHT_CONFIG
+
+def get_selector_effect_attrs(effect="REVERSE_BLINK", frame=0, speed_factor=10) -> int:
+    toggle_state = (frame // speed_factor) % 2
+    if effect == "NONE":
+        return curses.A_NORMAL
+    elif effect == "REVERSE":
+        return curses.A_REVERSE
+    elif effect == "BLINK":
+        return curses.A_BLINK
+    elif effect == "REVERSE_BLINK":
+        return (curses.A_REVERSE | curses.A_BLINK)
+    elif effect == "FLASH":
+        return curses.A_REVERSE if toggle_state == 0 else curses.A_NORMAL
+    elif effect == "GLOW":
+        return curses.A_BOLD if toggle_state == 0 else curses.A_NORMAL
+    elif effect == "SHIMMER":
+        return (curses.A_BOLD | curses.A_BLINK) if toggle_state == 0 else curses.A_NORMAL
+    return curses.A_REVERSE  # fallback
+
+def draw_global_selector_line(stdscr, row: int, text: str, is_selected: bool=False, frame: int=0) -> None:
+    config = get_global_selector_config()
+    selected_color_name   = config["selected_color_name"]
+    unselected_color_name = config["unselected_color_name"]
+    effect_name           = config["effect_name"]
+    speed_factor          = config["speed_factor"]
+
+    if is_selected:
+        attrs = get_selector_effect_attrs(effect=effect_name, frame=frame, speed_factor=speed_factor)
+        color_attr = get_color_attr(selected_color_name) | attrs
+    else:
+        color_attr = get_color_attr(unselected_color_name)
+
+    safe_addstr(stdscr, row, 2, text, color_attr)
+
+
+# FileName: curses_input.py
+#
+# version: 2.2
+#
+# Summary: A curses-based front-end implementing IGameInput for user interaction.
+#
+# Tags: curses, ui, rendering
+
+import curses
+from interfaces import IGameInput
+
+class CursesGameInput(IGameInput):
+    """
+    Implements IGameInput for curses: get_actions() reads the keyboard buffer,
+    returns a list of action strings like ["MOVE_UP", "QUIT", "INTERACT", etc.].
+    """
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.stdscr.nodelay(True)
+        self.stdscr.keypad(True)
+        curses.curs_set(0)
+
+    def get_actions(self):
+        actions = []
+        # read up to ~5 keystrokes at once
+        for _ in range(5):
+            key = self.stdscr.getch()
+            if key == -1:
+                break
+            act = self._interpret_key(key)
+            if act:
+                actions.append(act)
+        return actions
+
+    def _interpret_key(self, key):
+        # yes-quit
+        if key in (ord('y'), ord('Y')):
+            return "YES_QUIT"
+        # quit => q, Q, ESC
+        if key in (ord('q'), ord('Q'), 27):
+            return "QUIT"
+
+        # movement
+        if key in (ord('w'), curses.KEY_UP):
+            return "MOVE_UP"
+        if key in (ord('s'), curses.KEY_DOWN):
+            return "MOVE_DOWN"
+        if key in (ord('a'), curses.KEY_LEFT):
+            return "MOVE_LEFT"
+        if key in (ord('d'), curses.KEY_RIGHT):
+            return "MOVE_RIGHT"
+
+        # editor toggle
+        if key == ord('e'):
+            return "EDITOR_TOGGLE"
+
+        # quick-save
+        if key == ord('o'):
+            return "SAVE_QUICK"
+
+        # debug
+        if key == ord('v'):
+            return "DEBUG_TOGGLE"
+
+        # interact
+        if key == ord(' '):
+            return "INTERACT"
+
+        # editor keys
+        if key == ord('p'):
+            return "PLACE_ITEM"
+        if key == ord('x'):
+            return "REMOVE_TOP"
+        if key == ord('u'):
+            return "UNDO"
+        if key == ord('l'):
+            return "NEXT_ITEM"
+        if key == ord('k'):
+            return "PREV_ITEM"
+
+        return None
+
+
+# FileName: curses_map_ui.py
+#
+# version: 2.14
+#
+# Summary: Contains the shared restore_input_mode() function used by both
+#          the load and save flows. (All other save-related functions have
+#          been relocated to curses_scene_save.py.)
+#
+# Tags: map, ui, io
+
+import curses
+
+def restore_input_mode(stdscr):
+    """
+    Restore standard no-echo, invisible cursor, non-blocking input mode.
+    Used by both load and save scenes.
+    """
+    curses.noecho()
+    curses.curs_set(0)
+    curses.napms(50)
+    curses.flushinp()
+    stdscr.nodelay(True)
+
+
+# FileName: curses_menus.py
+#
+# version: 2.0
+#
+# Summary: High-level scene/menu functions (settings screen, layered scene example),
+#          formerly included scene_home_screen and MenuFlowManager, which have been
+#          refactored out into curses_scene_home.py and curses_scene_manager.py.
+#
+# Tags: scene, animation, menu
+
+import curses
+import debug
+
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
+from .curses_art_skins import MAIN_MENU_ART, CROCODILE, CURRENT_SKIN
+from .curses_highlight import draw_global_selector_line
+from .curses_renderer import CursesGameRenderer  # For example usage if we want
+
+# -- Removed scene_home_screen (now in curses_scene_home) --
+# -- Removed MenuFlowManager (now in curses_scene_manager) --
+
+def scene_settings_screen(stdscr):
+    """
+    A placeholder 'Settings' screen. Press 'q' or ESC to return to the main menu.
+    """
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    while True:
+        stdscr.erase()
+        draw_screen_frame(stdscr)
+        draw_title(stdscr, "Settings (Placeholder)", row=1)
+
+        info_lines = [
+            "Here is where you might configure volume, video settings, etc.",
+            "Press 'q' or ESC to go back..."
+        ]
+        draw_instructions(stdscr, info_lines, from_bottom=2)
+
+        stdscr.refresh()
+
+        key = stdscr.getch()
+        if key in (ord('q'), ord('Q'), 27):
+            return
+        elif key == ord('v'):
+            debug.toggle_debug()
+
+
+def example_layered_scene(curses_renderer):
+    """
+    Example of how layered rendering might be done, though not fully utilized here.
+    """
+    pass  # For demonstration, left as a placeholder.
+
+
+# FileName: curses_renderer.py
+# version: 3.6
+#
+# Summary: A curses-based in-game renderer implementing IGameRenderer,
+#          plus a new layered render_scene(...) approach for menus or overlays.
+#
+# Tags: curses, ui, rendering
+
+import curses
+import debug
+from interfaces import IGameRenderer
+from .curses_color_init import init_colors, color_pairs
+from .curses_highlight import get_color_attr
+from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
+from .curses_common import draw_screen_frame
+from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
+from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
+
+class CursesGameRenderer(IGameRenderer):
+    """
+    Implements IGameRenderer using curses: handles rendering the game world,
+    partial or full redraw, etc. Also provides a 'render_scene(...)' method
+    to draw layered scenes (menus, overlays).
+    """
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.map_top_offset = 3
+
+        self.stdscr.nodelay(True)
+        self.stdscr.keypad(True)
+        curses.curs_set(0)
+        init_colors()
+
+    ########################################################################
+    # 1) NEW: LAYERED SCENE RENDERING
+    ########################################################################
+
+    def render_scene(self, model, scene_layers):
+        """
+        Render a scene composed of multiple layers. We'll sort them by z ascending,
+        then call a sub-render function for each layer if 'visible' is True.
+        """
+        self.stdscr.erase()
+
+        # Sort by z, then draw
+        sorted_layers = sorted(scene_layers, key=lambda l: l["z"])
+        for layer in sorted_layers:
+            if layer.get("visible", True):
+                layer_name = layer.get("name", "")
+                self._render_layer(layer_name, model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _render_layer(self, layer_name, model):
+        """
+        Actually draw the requested layer_name. For demonstration, we do placeholders.
+        """
+        if layer_name == "background":
+            draw_screen_frame(self.stdscr, "UI_CYAN")
+
+        elif layer_name == "game_world":
+            if model:
+                self._full_redraw(model)
+
+        # Additional layers could be here:
+        # elif layer_name == "menu_overlay": ...
+        # etc.
+
+    ########################################################################
+    # 2) CLASSIC GAME RENDERING (used during normal gameplay)
+    ########################################################################
+
+    def render(self, model):
+        if model.full_redraw_needed:
+            self._full_redraw(model)
+            model.full_redraw_needed = False
+        else:
+            self._update_dirty_tiles(model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def on_camera_move(self, dx, dy, model):
+        if abs(dx) > 0 or abs(dy) > 1:
+            model.full_redraw_needed = True
+            return
+
+        max_h, max_w = self.stdscr.getmaxyx()
+        self.stdscr.setscrreg(self.map_top_offset, max_h - 1)
+
+        try:
+            if dy == 1:
+                self.stdscr.scroll(1)
+                new_row = model.camera_y + (max_h - self.map_top_offset) - 1
+                for col in range(model.camera_x, model.camera_x + max_w):
+                    model.dirty_tiles.add((col, new_row))
+            elif dy == -1:
+                self.stdscr.scroll(-1)
+                new_row = model.camera_y
+                for col in range(model.camera_x, model.camera_x + max_w):
+                    model.dirty_tiles.add((col, new_row))
+        except curses.error:
+            model.full_redraw_needed = True
+
+        self.stdscr.setscrreg(0, max_h - 1)
+
+    def prompt_yes_no(self, question: str) -> bool:
+        """
+        A simple curses-based yes/no prompt at the bottom row, returning bool.
+        """
+        max_h, max_w = self.stdscr.getmaxyx()
+        row = max_h - 2
+        safe_addstr(self.stdscr, row, 0, " " * (max_w - 1), 0, clip_borders=False)
+        safe_addstr(self.stdscr, row, 2, question, 0, clip_borders=False)
+        self.stdscr.refresh()
+
+        self.stdscr.nodelay(False)
+        while True:
+            c = self.stdscr.getch()
+            if c in (ord('y'), ord('Y')):
+                self.stdscr.nodelay(True)
+                return True
+            elif c in (ord('n'), ord('N'), ord('q'), 27):
+                self.stdscr.nodelay(True)
+                return False
+
+    def get_curses_window(self):
+        return self.stdscr
+
+    ########################################################################
+    # 3) INTERNAL GAME RENDER UTILS
+    ########################################################################
+
+    def _full_redraw(self, model):
+        self.stdscr.clear()
+        self._draw_screen_frame()
+
+        # Show either editor info or player's inventory
+        if model.context.enable_editor_commands and model.editor_scenery_list:
+            sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
+            self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}", "WHITE_TEXT")
+        else:
+            inv_text = (
+                f"Inventory: Gold={model.player.gold}, "
+                f"Wood={model.player.wood}, Stone={model.player.stone}"
+            )
+            self._draw_text(1, 2, inv_text, "WHITE_TEXT")
+
+        max_h, max_w = self.stdscr.getmaxyx()
+        visible_cols = max_w
+        visible_rows = max_h - self.map_top_offset
+
+        for wx in range(model.camera_x, min(model.camera_x + visible_cols, model.world_width)):
+            for wy in range(model.camera_y, min(model.camera_y + visible_rows, model.world_height)):
+                model.dirty_tiles.add((wx, wy))
+
+        self._update_dirty_tiles(model)
+
+    def _update_dirty_tiles(self, model):
+        max_h, max_w = self.stdscr.getmaxyx()
+        for (wx, wy) in model.dirty_tiles:
+            if 0 <= wx < model.world_width and 0 <= wy < model.world_height:
+                sx = wx - model.camera_x
+                sy = wy - model.camera_y + self.map_top_offset
+                if 0 <= sx < max_w and 0 <= sy < max_h:
+                    self._draw_single_tile(wx, wy, sx, sy, model)
+
+        self._draw_player_on_top(model)
+
+    def _draw_single_tile(self, wx, wy, sx, sy, model):
+        # clear background first
+        blank_attr = get_color_attr("white_on_black")
+        safe_addch(self.stdscr, sy, sx, " ", blank_attr, clip_borders=True)
+
+        tile_layers = model.placed_scenery.get((wx, wy), None)
+        if not tile_layers:
+            return
+
+        # Floor
+        floor_obj = tile_layers.get(FLOOR_LAYER)
+        floor_color_name = "white_on_black"
+        if floor_obj:
+            info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+            ch = info.get("ascii_char", floor_obj.char)
+            floor_color_name = info.get("color_name", "white_on_black")
+            floor_attr = get_color_attr(floor_color_name)
+            safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
+
+        # Now draw objects, items, entities on top
+        # Each object gets the floor's background but overrides the foreground
+        obj_list = tile_layers.get(OBJECTS_LAYER, [])
+        obj_list += tile_layers.get(ITEMS_LAYER, [])
+        obj_list += tile_layers.get(ENTITIES_LAYER, [])
+
+        for obj in obj_list:
+            # if it's a tree trunk or top in player's tile, we might skip drawing over them later
+            info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
+            ch = info.get("ascii_char", obj.char)
+            obj_color_name = info.get("color_name", "white_on_black")
+
+            # If it's specifically TreeTop on the player's tile, we do special logic later.
+            if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
+                continue
+
+            # Parse floor color to get background
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            # Parse object color to get foreground
+            fg_obj, _ = parse_two_color_names(obj_color_name)
+            final_color = f"{fg_obj}_on_{bg_floor}"
+            attr = get_color_attr(final_color)
+
+            safe_addch(self.stdscr, sy, sx, ch, attr, clip_borders=True)
+
+    def _draw_player_on_top(self, model):
+        px = model.player.x - model.camera_x
+        py = model.player.y - model.camera_y + self.map_top_offset
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        if 0 <= px < max_w and 0 <= py < max_h:
+            # Get floor color at player's tile
+            tile_layers = model.placed_scenery.get((model.player.x, model.player.y), {})
+            floor_obj = tile_layers.get(FLOOR_LAYER)
+            floor_color_name = "white_on_black"
+            if floor_obj:
+                finfo = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+                floor_color_name = finfo.get("color_name", "white_on_black")
+
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            # Player is typically "white" on the floor's background
+            player_color = f"white_on_{bg_floor}"
+            attr_bold = get_color_attr(player_color, bold=True)
+            safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
+
+            # If there's a trunk/top in the same tile, it might appear over the player
+            objects_list = tile_layers.get(OBJECTS_LAYER, [])
+            trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
+            for t_obj in trunk_tops:
+                info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
+                ch = info.get("ascii_char", t_obj.char)
+                top_color = info.get("color_name", "white_on_black")
+
+                # Overwrite the tile with trunk or top, ignoring player's sprite
+                fg_obj, _ = parse_two_color_names(top_color)
+                final_color = f"{fg_obj}_on_{bg_floor}"
+                trunk_attr = get_color_attr(final_color)
+                safe_addch(self.stdscr, py, px, ch, trunk_attr, clip_borders=True)
+
+    def _draw_screen_frame(self):
+        draw_screen_frame(self.stdscr)
+
+    def _draw_text(self, row, col, text, color_name, bold=False, underline=False):
+        attr = get_color_attr(color_name, bold=bold, underline=underline)
+        safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
+
+
+# FileName: curses_scene_home.py
+#
+# version: 1.0 (extracted from curses_menus)
+#
+# Summary: Defines the 'scene_home_screen' function for the main / title screen.
+#
+# Tags: scene, home, menu
+
+import curses
+import debug
+
+from .curses_common import draw_screen_frame, draw_title
+from .curses_animations import _draw_art
+from .curses_art_skins import MAIN_MENU_ART
+from .curses_highlight import draw_global_selector_line
+
+def scene_home_screen(stdscr):
+    """
+    Example 'home screen' that animates MAIN_MENU_ART left/right ±2 columns,
+    then shows menu instructions. Returns:
+      1 => Play
+      2 => Quit
+      3 => Settings
+    """
+    stdscr.nodelay(True)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    max_shift = 2
+    frame_delay_ms = 50
+    shift_delay_frames = 20
+
+    offset_x = 0
+    direction = -1
+    frame_count = 0
+
+    main_menu_lines = MAIN_MENU_ART
+    menu_lines = [
+        "~~~~~~~~~",
+        "1) Play",
+        "2) Quit",
+        # "3) Settings"  # We keep the placeholder index for reference
+        "~~~~~~~~~"
+    ]
+    # We'll consider lines #1 => "1) Play", #2 => "2) Quit", #3 => "3) Settings"
+    selectable_indices = [1, 2, 3]  # even though line 3 is commented, we keep the logic
+
+    current_select_slot = 0
+
+    while True:
+        stdscr.erase()
+        draw_screen_frame(stdscr)
+
+        draw_title(stdscr, "Welcome to Retro RPG!", row=1)
+        _draw_art(stdscr, main_menu_lines, start_row=3, start_col=2 + offset_x)
+
+        # Draw menu near the bottom
+        h, w = stdscr.getmaxyx()
+        from_bottom = 2
+        start_row = h - from_bottom - len(menu_lines)
+        if start_row < 1:
+            start_row = 1
+
+        row = start_row
+        for i, line_text in enumerate(menu_lines):
+            is_selected = False
+            if i in selectable_indices:
+                sel_index = selectable_indices.index(i)
+                if sel_index == current_select_slot:
+                    is_selected = True
+            draw_global_selector_line(
+                stdscr,
+                row,
+                line_text,
+                is_selected=is_selected,
+                frame=frame_count
+            )
+            row += 1
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+        key = stdscr.getch()
+        if key != -1:
+            # Simple up/down to cycle among 3 "slots"
+            if key in (curses.KEY_UP, ord('w'), ord('W')):
+                current_select_slot = max(0, current_select_slot - 1)
+            elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
+                if current_select_slot < len(selectable_indices) - 1:
+                    current_select_slot += 1
+            elif key in (curses.KEY_ENTER, 10, 13):
+                # user pressed Enter on the current slot
+                if current_select_slot == 0:
+                    return 1  # Play
+                elif current_select_slot == 1:
+                    return 2  # Quit
+                else:
+                    return 3  # Settings
+            elif key == ord('1'):
+                return 1  # Play
+            elif key == ord('2'):
+                return 2  # Quit
+            elif key == ord('3'):
+                return 3  # Settings
+            elif key in (ord('q'), ord('Q'), 27):
+                return 2  # user pressed Esc => Quit
+            elif key == ord('v'):
+                debug.toggle_debug()
+
+        frame_count += 1
+        if frame_count % shift_delay_frames == 0:
+            offset_x += direction
+            if offset_x >= max_shift:
+                offset_x = max_shift
+                direction = -1
+            elif offset_x <= -max_shift:
+                offset_x = -max_shift
+                direction = 1
+
+        curses.napms(frame_delay_ms)
+
+
+
+# FileName: curses_scene_load.py
+#
+# version: 1.0
+#
+# Summary: Extracted load-scene logic from curses_map_ui. Handles displaying
+#          maps for loading, generating new maps, or editing existing ones.
+#
+# Tags: map, load, scene
+
+import curses
+import os
+import debug
+
+from .curses_color_init import init_colors
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
+from .curses_art_skins import CROCODILE
+from .curses_highlight import draw_global_selector_line
+from .curses_utils import safe_addstr, get_color_attr
+from .curses_map_ui import restore_input_mode
+
+def draw_load_map_screen(stdscr):
+    """
+    Draw the screen layout for loading a map.
+    """
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Load Map", row=1)
+    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
+
+    instructions = [
+        "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=toggle debug"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
+
+
+def prompt_delete_confirmation(stdscr, filename):
+    """
+    Prompt the user: 'Delete X? (y/n)'. Return True if 'y', else False.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+    question = f"Delete '{filename}'? (y/n)"
+    attr = get_color_attr("WHITE_TEXT")
+
+    row = max_h - 2
+    blank_line = " " * (max_w - 4)
+    safe_addstr(stdscr, row, 2, blank_line, attr, clip_borders=False)
+    safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
+    stdscr.refresh()
+
+    stdscr.nodelay(False)
+    curses.curs_set(1)
+    curses.echo()
+
+    while True:
+        c = stdscr.getch()
+        if c in (ord('y'), ord('Y')):
+            restore_input_mode(stdscr)
+            return True
+        elif c in (ord('n'), ord('N'), ord('q'), 27):
+            restore_input_mode(stdscr)
+            return False
+
+
+def display_map_list(stdscr):
+    """
+    Show the 'load map' screen. Let user select a .json or generate a new map.
+    Return:
+      - The filename chosen,
+      - "GENERATE" if user selects 'Generate a new map',
+      - A tuple like ("EDIT", filename) if user chooses 'e' for edit mode,
+      - "" if user cancels,
+      - or ("EDIT_GENERATE", data) if user wants to edit a newly generated map.
+    """
+    init_colors()
+    maps_dir = "maps"
+    if not os.path.isdir(maps_dir):
+        os.makedirs(maps_dir, exist_ok=True)
+
+    files = [f for f in os.listdir(maps_dir) if f.endswith(".json")]
+    files.sort()
+    files.insert(0, "0) Generate a new map>")
+
+    selected_index = 0
+    frame_count = 0
+
+    while True:
+        draw_load_map_screen(stdscr)
+        max_h, max_w = stdscr.getmaxyx()
+        row = 10
+
+        for i, fname in enumerate(files):
+            if row >= max_h - 2:
+                break
+            if i == 0:
+                display_text = "Generate a new map"
+            else:
+                display_text = f"{i}) {fname}"
+
+            is_sel = (i == selected_index)
+            draw_global_selector_line(
+                stdscr,
+                row,
+                f"> {display_text}" if is_sel else f"  {display_text}",
+                is_selected=is_sel,
+                frame=frame_count
+            )
+            row += 1
+
+        stdscr.refresh()
+        key = stdscr.getch()
+
+        if key in (curses.KEY_UP, ord('w'), ord('W')):
+            selected_index = max(0, selected_index - 1)
+        elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
+            selected_index = min(len(files) - 1, selected_index + 1)
+        elif key in (curses.KEY_ENTER, 10, 13):
+            if selected_index == 0:
+                return "GENERATE"
+            else:
+                return files[selected_index]
+        elif key in (ord('q'), ord('y')):
+            return ""
+        elif key == ord('e'):
+            if selected_index == 0:
+                return ("EDIT_GENERATE", None)
+            else:
+                return ("EDIT", files[selected_index])
+        elif key == ord('v'):
+            debug.toggle_debug()
+        elif key == ord('d'):
+            # Deleting a file only makes sense if selected_index > 0
+            if selected_index > 0:
+                to_delete = files[selected_index]
+                confirm = prompt_delete_confirmation(stdscr, to_delete)
+                if confirm:
+                    try:
+                        os.remove(os.path.join(maps_dir, to_delete))
+                    except OSError:
+                        pass
+                    del files[selected_index]
+                    if selected_index >= len(files):
+                        selected_index = len(files) - 1
+        elif ord('0') <= key <= ord('9'):
+            typed = key - ord('0')
+            if 0 <= typed < len(files):
+                selected_index = typed
+
+        if len(files) == 1:
+            selected_index = 0
+
+        frame_count += 1
+
+
+def load_map_ui(stdscr):
+    """
+    The user flow for loading a map or generating a new one.
+    Returns either:
+      - "" if canceled,
+      - "GENERATE" => dict of newly generated map,
+      - A tuple like ("EDIT", filename),
+      - or just the filename string if user loads an existing map.
+    """
+    selection = display_map_list(stdscr)
+    if not selection:
+        # user canceled => back to main menu
+        return ""
+
+    if selection == "GENERATE":
+        from procedural_map_generator.generator import generate_procedural_map
+        return generate_procedural_map()
+
+    if isinstance(selection, tuple):
+        if selection[0] == "EDIT_GENERATE":
+            from procedural_map_generator.generator import generate_procedural_map
+            data = generate_procedural_map()
+            return ("EDIT_GENERATE", data)
+        elif selection[0] == "EDIT":
+            return ("EDIT", selection[1])
+
+    elif isinstance(selection, dict):
+        # user chose a newly generated dict
+        return selection
+
+    # Otherwise it's a filename
+    return selection
+
+
+
+# FileName: curses_scene_manager.py
+#
+# version: 2.1
+#
+# Summary: Contains the high-level MenuFlowManager class that organizes
+#          the main menu screens (home, settings, play, etc.), now
+#          incorporating the former play_main.py logic into "PLAY".
+#
+# Tags: scene, menu, manager
+
+import curses
+import debug
+
+from .curses_scene_home import scene_home_screen
+from .curses_menus import scene_settings_screen
+# We now load maps directly from curses_scene_load:
+from .curses_scene_load import load_map_ui
+# And run the game engine from play_runner:
+from play_runner import parse_and_run_play
+
+
+class MenuFlowManager:
+    """
+    A simple controller that organizes the main menu screens (HOME, SETTINGS, PLAY)
+    and transitions between them. The PLAY flow now directly loads a map
+    or generates a new one, then calls parse_and_run_play from play_runner.
+    """
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.current_state = "HOME"
+        self.running = True
+
+    def run(self):
+        while self.running:
+            if self.current_state == "HOME":
+                choice = scene_home_screen(self.stdscr)
+                if choice == 1:
+                    # user selected "Play"
+                    self.current_state = "PLAY"
+                elif choice == 2:
+                    # user selected "Quit"
+                    self.current_state = "QUIT"
+                else:
+                    # user selected "Settings" (choice == 3)
+                    self.current_state = "SETTINGS"
+
+            elif self.current_state == "PLAY":
+                #
+                # We fold the old play_main.py loop in here:
+                #
+                while True:
+                    selection = load_map_ui(self.stdscr)
+                    if not selection:
+                        # user canceled => back to main menu
+                        self.current_state = "HOME"
+                        break
+
+                    # If load_map_ui returns a tuple (e.g. ("EDIT", filename)):
+                    if isinstance(selection, tuple):
+                        action_type, actual_map = selection
+                        if action_type == "EDIT_GENERATE":
+                            parse_and_run_play(self.stdscr, actual_map, is_generated=True)
+                        elif action_type == "EDIT":
+                            parse_and_run_play(self.stdscr, actual_map, is_generated=False)
+
+                    elif isinstance(selection, dict):
+                        # user generated a new map => is_generated = True
+                        parse_and_run_play(self.stdscr, selection, is_generated=True)
+
+                    else:
+                        # user picked an existing map filename => is_generated = False
+                        parse_and_run_play(self.stdscr, selection, is_generated=False)
+
+                # Once the user cancels the load screen, we break out of the loop
+                # and go back to HOME.
+
+            elif self.current_state == "SETTINGS":
+                scene_settings_screen(self.stdscr)
+                self.current_state = "HOME"
+
+            elif self.current_state == "QUIT":
+                self.running = False
+
+
+# FileName: curses_scene_save.py
+#
+# version: 1.0
+#
+# Summary: Extracted save-scene logic from curses_map_ui. Handles displaying
+#          maps for saving (overwrite or create new) and performs the save UI flow.
+#
+# Tags: map, save, scene
+
+import curses
+import os
+import debug
+
+from .curses_color_init import init_colors
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
+from .curses_art_skins import CROCODILE
+from .curses_highlight import draw_global_selector_line
+from .curses_utils import safe_addstr, get_color_attr
+# Import the shared restore_input_mode from curses_map_ui:
+from .curses_map_ui import restore_input_mode
+
+
+def draw_save_map_screen(stdscr):
+    """
+    Draw the screen layout for saving a map.
+    """
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Save Map", row=1)
+    _draw_art(stdscr, CROCODILE, start_row=3, start_col=2)
+
+    instructions = [
+        "Select a map to overwrite, 'n'=new, ENTER=cancel, 'v'=toggle debug"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3, color_name="WHITE_TEXT")
+
+
+def prompt_for_filename(stdscr, prompt):
+    """
+    Prompt user for a filename (used by the save flow).
+    """
+    init_colors()
+    draw_save_map_screen(stdscr)
+    max_h, max_w = stdscr.getmaxyx()
+
+    curses.echo()
+    curses.curs_set(1)
+    stdscr.nodelay(False)
+
+    row = 10
+    if row < max_h - 1:
+        attr = get_color_attr("UI_CYAN")
+        safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
+        stdscr.refresh()
+
+        filename_bytes = stdscr.getstr(row, 2 + len(prompt) + 1, 20)
+
+        restore_input_mode(stdscr)
+
+        if filename_bytes:
+            return filename_bytes.decode('utf-8', errors='ignore').strip()
+
+    restore_input_mode(stdscr)
+    return ""
+
+
+def display_map_list_for_save(stdscr):
+    """
+    Show a list of existing map files for overwriting,
+    or let the user create a new one. Return:
+     - map filename to overwrite,
+     - "NEW_FILE" for a new filename,
+     - "" if canceled.
+    """
+    init_colors()
+    maps_dir = "maps"
+    if not os.path.isdir(maps_dir):
+        os.makedirs(maps_dir, exist_ok=True)
+
+    files = [f for f in os.listdir(maps_dir) if f.endswith(".json")]
+    files.sort()
+
+    while True:
+        draw_save_map_screen(stdscr)
+        max_h, max_w = stdscr.getmaxyx()
+        row = 10
+
+        if files:
+            attr_cyan = get_color_attr("UI_CYAN")
+            _draw_global_text(stdscr, row,
+                "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:",
+                attr_cyan
+            )
+            row += 1
+
+            for i, filename in enumerate(files, start=1):
+                if row >= max_h - 1:
+                    break
+                attr_yellow = get_color_attr("YELLOW_TEXT")
+                _draw_global_text(stdscr, row, f"{i}. {filename}", attr_yellow)
+                row += 1
+
+            if row < max_h - 1:
+                _draw_global_text(stdscr, row,
+                    "Enter choice or press Enter to cancel:",
+                    attr_cyan
+                )
+                row += 1
+        else:
+            attr_cyan = get_color_attr("UI_CYAN")
+            _draw_global_text(stdscr, row,
+                "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
+                attr_cyan
+            )
+            row += 1
+
+        stdscr.refresh()
+
+        stdscr.nodelay(False)
+        curses.curs_set(1)
+        curses.echo()
+
+        if row < max_h:
+            try:
+                selection_bytes = stdscr.getstr(row, 2, 20)
+                if not selection_bytes:
+                    restore_input_mode(stdscr)
+                    return ""
+                selection = selection_bytes.decode('utf-8').strip()
+            except:
+                restore_input_mode(stdscr)
+                return ""
+        else:
+            restore_input_mode(stdscr)
+            return ""
+
+        restore_input_mode(stdscr)
+
+        if not selection:
+            return ""
+        if selection.lower() == 'n':
+            return "NEW_FILE"
+        elif selection.lower() == 'v':
+            debug.toggle_debug()
+            continue
+        elif selection.isdigit():
+            idx = int(selection) - 1
+            if 0 <= idx < len(files):
+                return files[idx]
+
+
+def _draw_global_text(stdscr, row, text, attr):
+    safe_addstr(stdscr, row, 2, text, attr, clip_borders=True)
+
+
+def save_map_ui(stdscr, placed_scenery, player=None,
+                world_width=100, world_height=100,
+                filename_override=None, notify_overwrite=False):
+    """
+    The user flow for saving a map. Potentially prompts for a filename,
+    or overwriting an existing file.
+    """
+    import map_io_main
+    from map_io_storage import save_map_file
+
+    if filename_override:
+        filename = filename_override
+    else:
+        overwrite_or_new = display_map_list_for_save(stdscr)
+        if not overwrite_or_new:
+            return
+        if overwrite_or_new == "NEW_FILE":
+            filename = prompt_for_filename(stdscr, "Enter filename to save as: ")
+            if not filename:
+                return
+            if not filename.endswith(".json"):
+                filename += ".json"
+        else:
+            filename = overwrite_or_new
+
+    maps_dir = "maps"
+    if not os.path.isdir(maps_dir):
+        os.makedirs(maps_dir, exist_ok=True)
+
+    save_path = os.path.join(maps_dir, filename)
+    file_existed = os.path.exists(save_path)
+
+    map_data = map_io_main.build_map_data(
+        placed_scenery,
+        player=player,
+        world_width=world_width,
+        world_height=world_height
+    )
+
+    save_map_file(save_path, map_data)
+
+    if file_existed and notify_overwrite:
+        curses.napms(500)
+
+
+
+# FileName: curses_theme_styles.py
+# version: 1.2
+# Summary: Provides a centralized theming/border styling system for RetroRPG,
+#          now using ASCII-only borders, unified across scenes.
+# Tags: theme, style, border, curses
+
+import curses
+
+##############################################################################
+# THEME DICTIONARY
+##############################################################################
+THEME = {
+    "background":       "black_on_black",    # default fallback background color
+    "title_color":      "white_on_black",    # color for titles
+    "text_color":       "white_on_black",    # main text color
+    "instruction_color":"magenta_on_black",  # instructions / footers
+}
+
+##############################################################################
+# BORDER_STYLES (ASCII-only)
+# We define two distinct ones: "home_box" and "white_box"
+##############################################################################
+BORDER_STYLES = {
+    "home_box": {
+        "color_name":        "WHITE_TEXT",  # or any valid color alias from curses_color_init
+        "corner_tl":         "+",
+        "corner_tr":         "+",
+        "corner_bl":         "+",
+        "corner_br":         "+",
+        "line_horizontal":   "-",
+        "line_vertical":     "|",
+    },
+    "white_box": {
+        "color_name":        "WHITE_TEXT",
+        "corner_tl":         "+",
+        "corner_tr":         "+",
+        "corner_bl":         "+",
+        "corner_br":         "+",
+        "line_horizontal":   "-",
+        "line_vertical":     "|",
+    },
+}
+
+##############################################################################
+# SCENE_BORDER_MAP
+# Which border style to use for each scene name.
+##############################################################################
+SCENE_BORDER_MAP = {
+    "HOME":     "home_box",
+    "SETTINGS": "white_box",
+    "LOAD":     "white_box",
+    "SAVE":     "white_box",
+    "GAME":     "white_box",
+}
+
+##############################################################################
+# OPTIONAL PER-SCENE OVERRIDES
+# If you want certain scenes to override the default THEME keys.
+##############################################################################
+SCENE_THEME_OVERRIDES = {
+    "HOME": {
+        "background":  "black_on_white",
+        # "title_color": "white_on_red",
+    },
+    "SETTINGS": {
+        "title_color": "white_on_magenta",
+    },
+    # e.g., "LOAD" or "SAVE" could override other aspects if desired.
+}
+
+
+# FileName: curses_utils.py
+#
+# version: 1.1
+#
+# Summary: Provides safe curses output helpers and color attribute assembly.
+#
+# Tags: curses, utils
+
+import curses
+from typing import Optional
+from .curses_color_init import color_pairs
+
+def get_color_attr(color_name: str, bold: bool = False, blink: bool = False, underline: bool = False) -> int:
+    """
+    Given a color name like "white_on_black", returns a curses attribute
+    including optional BOLD/BLINK/UNDERLINE bits.
+    """
+    pair_id = color_pairs.get(color_name, 0)
+    attr = curses.color_pair(pair_id)
+    if bold:
+        attr |= curses.A_BOLD
+    if blink:
+        attr |= curses.A_BLINK
+    if underline:
+        attr |= curses.A_UNDERLINE
+    return attr
+
+def parse_two_color_names(fg_bg: str) -> (str, str):
+    """
+    Splits a string like "white_on_blue" into ("white","blue").
+    If invalid, returns ("white","black").
+    """
+    parts = fg_bg.split("_on_")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return ("white", "black")
+
+def _clip_coords_for_borders(row: int, col: int, max_h: int, max_w: int) -> (int, int):
+    if row < 1 or row > (max_h - 2):
+        return (-1, -1)
+    if col < 1:
+        col = 1
+    if col > (max_w - 2):
+        return (-1, -1)
+    return (row, col)
+
+def _truncate_for_borders_text(col: int, text: str, max_w: int) -> str:
+    available_width = (max_w - 2) - col + 1
+    if available_width < 1:
+        return ""
+    return text[:available_width]
+
+def safe_addstr(stdscr: curses.window, row: int, col: int, text: str, attr: int, clip_borders: bool = True) -> None:
+    """
+    Safely add a string at (row, col), optionally clipping to a border if clip_borders=True.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+
+    if clip_borders:
+        row2, col2 = _clip_coords_for_borders(row, col, max_h, max_w)
+        if row2 < 0 or col2 < 0:
+            return
+        text = _truncate_for_borders_text(col2, text, max_w)
+        if not text:
+            return
+        row, col = row2, col2
+    else:
+        if row < 0 or row >= max_h:
+            return
+        if col < 0 or col >= max_w:
+            return
+        available_width = max_w - col
+        if available_width < 1:
+            return
+        text = text[:available_width]
+
+    try:
+        stdscr.addstr(row, col, text, attr)
+    except curses.error:
+        pass
+
+def safe_addch(stdscr: curses.window, row: int, col: int, ch, attr: int, clip_borders: bool = True) -> None:
+    """
+    Safely add a single character at (row, col).
+    """
+    max_h, max_w = stdscr.getmaxyx()
+
+    if clip_borders:
+        row2, col2 = _clip_coords_for_borders(row, col, max_h, max_w)
+        if row2 < 0 or col2 < 0:
+            return
+        row, col = row2, col2
+    else:
+        if row < 0 or row >= max_h:
+            return
+        if col < 0 or col >= max_w:
+            return
+
+    try:
+        stdscr.addch(row, col, ch, attr)
+    except curses.error:
+        pass
+
+
+# FileName: controls_ui.py
+#
+# version: 1.0
+#
+# Summary: Provides UI-related helpers for controls, including quick-saving
+#          (which uses curses_scene_save) and yes/no prompts using the renderer.
+#
+# Tags: controls, ui
+
+def prompt_yes_no(renderer, question):
+    """
+    Wrapper to ask the renderer to show a yes/no prompt. Return True if "yes".
+    We keep it outside controls_main so that controls_main isn't importing UI directly.
+    """
+    if not renderer:
+        return False
+    if not hasattr(renderer, "prompt_yes_no"):
+        return False
+    return renderer.prompt_yes_no(question)
+
+
+def perform_quick_save(model, renderer):
+    """
+    Performs a quick save of the map data, using curses_scene_save if we have a valid renderer.
+    """
+    if not renderer:
+        return
+    if not hasattr(renderer, "get_curses_window"):
+        return
+
+    ui_win = renderer.get_curses_window()
+    if not ui_win:
+        return
+
+    from curses_frontend.curses_scene_save import save_map_ui
+    player = model.player
+
+    if model.loaded_map_filename:
+        # Overwrite existing
+        save_map_ui(
+            ui_win,
+            model.placed_scenery,
+            player=player,
+            world_width=model.world_width,
+            world_height=model.world_height,
+            filename_override=model.loaded_map_filename
+        )
+    else:
+        # Prompt user for new name
+        save_map_ui(
+            ui_win,
+            model.placed_scenery,
+            player=player,
+            world_width=model.world_width,
+            world_height=model.world_height,
+            filename_override=None
+        )
+
+    model.full_redraw_needed = True
+
+
+
+# FileName: controls_main.py
+# version: 2.15
+# Summary: Interprets user input actions for both play and editor modes.
+#          No direct curses usage. We rely on action strings from IGameInput.
+#          UI calls (quick save, yes/no prompts) are delegated to controls_ui.py.
+# Tags: controls, input, main
+
+import time
+import debug
+from scenery_main import (
+    get_objects_at,
+    remove_scenery,
+    append_scenery
+)
+from utils_main import get_front_tile
+
+# IMPORT the new UI helpers:
+from controls_ui import perform_quick_save, prompt_yes_no
+
+def handle_common_actions(action, model, renderer, mark_dirty_func):
+    """
+    Handle actions that apply to BOTH play and editor modes:
+      - YES_QUIT => user pressed 'y' after a quit prompt
+      - SAVE_QUICK => quick save
+      - MOVE_UP / MOVE_DOWN / MOVE_LEFT / MOVE_RIGHT => movement
+      - DEBUG_TOGGLE => toggles debug
+      - EDITOR_TOGGLE => toggles editor mode
+    """
+    player = model.player
+    context = model.context
+
+    did_move = False
+    should_quit = False
+
+    # ACTION HANDLERS:
+
+    if action == "YES_QUIT":
+        # "YES_QUIT" typically means user confirmed they want to quit
+        if model.loaded_map_filename:
+            # If we have a filename, quick-save directly to that file
+            perform_quick_save(model, renderer)
+            should_quit = True
+        else:
+            # For a generated map with no filename, prompt to save
+            save_decision = prompt_yes_no(renderer, "Save this generated map? (y/n)")
+            if save_decision:
+                perform_quick_save(model, renderer)
+            should_quit = True
+
+        return (did_move, should_quit)
+
+    elif action == "MOVE_UP":
+        for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
+            old_x, old_y = player.x, player.y
+            player.move("up", model.world_width, model.world_height, model.placed_scenery)
+            if (player.x, player.y) != (old_x, old_y):
+                mark_dirty_func(old_x, old_y)
+                mark_dirty_func(player.x, player.y)
+                did_move = True
+
+    elif action == "MOVE_DOWN":
+        for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
+            old_x, old_y = player.x, player.y
+            player.move("down", model.world_width, model.world_height, model.placed_scenery)
+            if (player.x, player.y) != (old_x, old_y):
+                mark_dirty_func(old_x, old_y)
+                mark_dirty_func(player.x, player.y)
+                did_move = True
+
+    elif action == "MOVE_LEFT":
+        for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
+            old_x, old_y = player.x, player.y
+            player.move("left", model.world_width, model.world_height, model.placed_scenery)
+            if (player.x, player.y) != (old_x, old_y):
+                mark_dirty_func(old_x, old_y)
+                mark_dirty_func(player.x, player.y)
+                did_move = True
+
+    elif action == "MOVE_RIGHT":
+        for _ in range(debug.DEBUG_CONFIG["walk_speed_multiplier"]):
+            old_x, old_y = player.x, player.y
+            player.move("right", model.world_width, model.world_height, model.placed_scenery)
+            if (player.x, player.y) != (old_x, old_y):
+                mark_dirty_func(old_x, old_y)
+                mark_dirty_func(player.x, player.y)
+                did_move = True
+
+    elif action == "DEBUG_TOGGLE":
+        debug.toggle_debug()
+        model.full_redraw_needed = True
+
+    elif action == "EDITOR_TOGGLE":
+        # Toggle between play and editor contexts
+        if context.mode_name == "play":
+            context.mode_name = "editor"
+            context.enable_editor_commands = True
+            context.enable_sliding = False
+            context.enable_respawn = False
+
+            if not model.editor_scenery_list:
+                from scenery_main import get_placeable_scenery_defs
+                dynamic_defs = get_placeable_scenery_defs()
+                model.editor_scenery_list = [(def_id, None, None) for def_id in dynamic_defs]
+        else:
+            context.mode_name = "play"
+            context.enable_editor_commands = False
+            context.enable_sliding = True
+            context.enable_respawn = True
+
+        model.full_redraw_needed = True
+
+    elif action == "SAVE_QUICK":
+        # The user triggered a quick save
+        perform_quick_save(model, renderer)
+
+    return (did_move, should_quit)
+
+
+def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
+    """
+    Editor-only actions:
+      - PLACE_ITEM => place object
+      - REMOVE_TOP => remove topmost
+      - UNDO => undo
+      - NEXT_ITEM => cycle object forward
+      - PREV_ITEM => cycle object backward
+    """
+    if not model.context.enable_editor_commands:
+        return full_redraw_needed
+
+    editor_scenery_list = model.editor_scenery_list
+    editor_scenery_index = model.editor_scenery_index
+    player = model.player
+
+    from scenery_main import (
+        place_scenery_item,
+        get_objects_at,
+        remove_scenery,
+        append_scenery
+    )
+
+    if action == "PLACE_ITEM":
+        if editor_scenery_list:
+            current_def_id = editor_scenery_list[editor_scenery_index][0]
+            newly_placed = place_scenery_item(
+                current_def_id,
+                player,
+                model.placed_scenery,
+                mark_dirty_func=mark_dirty_func,
+                is_editor=True,
+                world_width=model.world_width,
+                world_height=model.world_height
+            )
+            if newly_placed:
+                model.editor_undo_stack.append(("added", newly_placed))
+
+    elif action == "REMOVE_TOP":
+        px, py = player.x, player.y
+        tile_objs = get_objects_at(model.placed_scenery, px, py)
+        if tile_objs:
+            top_obj = tile_objs[-1]
+            remove_scenery(model.placed_scenery, top_obj)
+            model.editor_undo_stack.append(("removed", [top_obj]))
+            mark_dirty_func(px, py)
+
+    elif action == "UNDO":
+        if model.editor_undo_stack:
+            action_type, objects_list = model.editor_undo_stack.pop()
+            if action_type == "added":
+                for obj in reversed(objects_list):
+                    remove_scenery(model.placed_scenery, obj)
+                    mark_dirty_func(obj.x, obj.y)
+            elif action_type == "removed":
+                for obj in objects_list:
+                    append_scenery(model.placed_scenery, obj)
+                    mark_dirty_func(obj.x, obj.y)
+
+    elif action == "NEXT_ITEM":
+        if editor_scenery_list:
+            model.editor_scenery_index = (editor_scenery_index + 1) % len(editor_scenery_list)
+            full_redraw_needed = True
+
+    elif action == "PREV_ITEM":
+        if editor_scenery_list:
+            model.editor_scenery_index = (editor_scenery_index - 1) % len(editor_scenery_list)
+            full_redraw_needed = True
+
+    return full_redraw_needed
+
+
+def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
+    """
+    Play-mode only actions: e.g. INTERACT => chop/mine
+    """
+    if model.context.enable_editor_commands:
+        return full_redraw_needed
+
+    player = model.player
+    from_scenery = model.placed_scenery
+    if action == "INTERACT":
+        fx, fy = get_front_tile(player)
+        tile_objs = get_objects_at(from_scenery, fx, fy)
+        found_something = False
+        removed_objs = []
+
+        trunk = next((o for o in tile_objs if o.definition_id == "TreeTrunk"), None)
+        if trunk:
+            found_something = True
+            removed_objs.append(trunk)
+            player.wood += 1
+            full_redraw_needed = True
+
+            # If there's a TreeTop directly above trunk, remove it too
+            top_objs = get_objects_at(from_scenery, fx, fy - 1)
+            top_o = next((o for o in top_objs if o.definition_id == "TreeTop"), None)
+            if top_o:
+                removed_objs.append(top_o)
+
+            if model.context.enable_respawn:
+                sublist = [(obj.x, obj.y, obj.definition_id) for obj in removed_objs]
+                model.respawn_list.append({"countdown": 50, "objects": sublist})
+
+        rock_o = next((o for o in tile_objs if o.definition_id == "Rock"), None)
+        if rock_o:
+            found_something = True
+            removed_objs.append(rock_o)
+            player.stone += 1
+            full_redraw_needed = True
+
+            if model.context.enable_respawn:
+                sublist = [(rock_o.x, rock_o.y, rock_o.definition_id)]
+                model.respawn_list.append({"countdown": 50, "objects": sublist})
+
+        if found_something:
+            for ro in removed_objs:
+                remove_scenery(from_scenery, ro)
+                mark_dirty_func(ro.x, ro.y)
+
+            model.action_flash_info = (fx, fy, 1)
+            mark_dirty_func(fx, fy)
+
+    return full_redraw_needed
+
+
+# FileName: engine_main.py
+# version: 3.2
+# Summary: Core game loop using IGameRenderer & IGameInput. Skips final render if should_quit is set.
+# Tags: engine, main, loop
+
+import time
+import debug
+
+from engine_camera import update_camera_with_deadzone, center_camera_on_player
+from engine_framerate import manage_framerate
+from controls_main import (
+    handle_common_actions,
+    handle_editor_actions,
+    handle_play_actions,
+)
+from engine_respawn import handle_respawns
+from engine_actionflash import update_action_flash
+from engine_npc import update_npcs
+from engine_network import handle_network
+from scenery_main import (get_scenery_def_id_at, apply_tile_effects)
+
+def run_game_loop(model, context, game_input, game_renderer):
+    """
+    The main logic loop, using IGameRenderer & IGameInput. 
+    Engine code here does NOT import curses or do curses calls.
+    """
+
+    model.context = context
+
+    # Center camera on player once at start
+    visible_cols, visible_rows = game_renderer.get_visible_size()
+    center_camera_on_player(model, visible_cols, visible_rows)
+
+    model.full_redraw_needed = True
+    model.should_quit = False
+
+    while not model.should_quit:
+        # 1) Gather input actions
+        actions = game_input.get_actions()
+        for act in actions:
+            # Pass the action to controls logic
+            did_move, want_quit = handle_common_actions(
+                act, model, game_renderer, lambda x, y: mark_dirty(model, x, y)
+            )
+            if want_quit:
+                model.should_quit = True
+                break
+
+            model.full_redraw_needed = handle_editor_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+            model.full_redraw_needed = handle_play_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+
+        # If user triggered quit, skip final re-render
+        if model.should_quit:
+            break
+
+        # 2) Camera logic
+        old_cam_x, old_cam_y = model.camera_x, model.camera_y
+        visible_cols, visible_rows = game_renderer.get_visible_size()
+        model.camera_x, model.camera_y = update_camera_with_deadzone(
+            model.player.x,
+            model.player.y,
+            model.camera_x,
+            model.camera_y,
+            visible_cols,
+            visible_rows,
+            model.world_width,
+            model.world_height,
+            dead_zone=2
+        )
+        dx = model.camera_x - old_cam_x
+        dy = model.camera_y - old_cam_y
+
+        # If camera jumped more than 1 tile, do a full redraw
+        if abs(dx) > 1 or abs(dy) > 1:
+            model.full_redraw_needed = True
+        else:
+            if dx != 0 or dy != 0:
+                game_renderer.on_camera_move(dx, dy, model)
+
+        # 3) Game updates
+        handle_network(model)
+        update_npcs(model, lambda x, y: mark_dirty(model, x, y))
+        handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
+
+        # If sliding is enabled, move player if no new actions
+        if context.enable_sliding and not actions:
+            tile_def_id = get_scenery_def_id_at(
+                model.player.x, model.player.y, model.placed_scenery
+            )
+            old_px, old_py = model.player.x, model.player.y
+            apply_tile_effects(
+                model.player,
+                tile_def_id,
+                model.placed_scenery,
+                is_editor=context.enable_editor_commands,
+                world_width=model.world_width,
+                world_height=model.world_height
+            )
+            if (model.player.x, model.player.y) != (old_px, old_py):
+                mark_dirty(model, old_px, old_py)
+                mark_dirty(model, model.player.x, model.player.y)
+
+        update_action_flash(model, lambda x, y: mark_dirty(model, x, y))
+
+        # 4) Rendering
+        game_renderer.render(model)
+        model.dirty_tiles.clear()
+
+        # 5) Framerate
+        manage_framerate(20)
+
+def mark_dirty(model, x, y):
+    model.dirty_tiles.add((x, y))
+
+
+# FileName: play_runner.py
+# version: 3.0
+# Summary: Orchestrates loading a map and calling the new engine loop for play or editor mode.
+# Tags: play, runner, map, editor
+
+import os
+import json
+
+from map_io_storage import parse_map_dict
+from player_char import Player
+from player_char_io import load_player, save_player
+from scenery_main import SceneryObject, ensure_layered_format
+from model_main import GameModel, GameContext
+
+# Now we use the front-end classes for input & rendering, but do NOT import curses here.
+from curses_frontend.curses_input import CursesGameInput
+from curses_frontend.curses_renderer import CursesGameRenderer
+from engine_main import run_game_loop
+
+def parse_and_run_editor(stdscr, filename_or_data, is_generated=False):
+    """
+    Loads/parses the map data, sets up model in 'editor' mode,
+    then calls run_game_loop with the curses front-end.
+    """
+    if isinstance(filename_or_data, dict):
+        raw_data = filename_or_data
+        model_filename = None
+    else:
+        model_filename = filename_or_data
+        maps_dir = "maps"
+        load_path = os.path.join(maps_dir, filename_or_data)
+        try:
+            with open(load_path, "r") as f:
+                raw_data = json.load(f)
+        except:
+            return
+
+    map_data = parse_map_dict(raw_data)
+    world_width = map_data["world_width"]
+    world_height = map_data["world_height"]
+    sinfo = map_data["scenery"]
+
+    # Load or create player
+    player = load_player()
+    if not player:
+        player = Player()
+
+    # Position player
+    if is_generated:
+        player.x = world_width // 2
+        player.y = world_height // 2
+    else:
+        px = raw_data.get("player_x", None)
+        py = raw_data.get("player_y", None)
+        if px is not None and py is not None:
+            player.x = px
+            player.y = py
+
+    # Clamp
+    player.x = max(0, min(player.x, world_width - 1))
+    player.y = max(0, min(player.y, world_height - 1))
+
+    # Build placed_scenery
+    placed_scenery = {}
+    for s in sinfo:
+        if "definition_id" in s:
+            x, y = s["x"], s["y"]
+            obj = SceneryObject(x, y, s["definition_id"])
+            placed_scenery.setdefault((x, y), []).append(obj)
+
+    # Convert old dict-of-lists into layered structure
+    placed_scenery = ensure_layered_format(placed_scenery)
+
+    # Create model & context
+    model = GameModel()
+    model.player = player
+    model.placed_scenery = placed_scenery
+    model.world_width = world_width
+    model.world_height = world_height
+    model.loaded_map_filename = None if is_generated else model_filename
+
+    context = GameContext("editor")
+
+    # Instantiate curses front-end
+    game_input = CursesGameInput(stdscr)
+    game_renderer = CursesGameRenderer(stdscr)
+
+    # Enter the main logic loop
+    run_game_loop(model, context, game_input, game_renderer)
+
+    # Save player data
+    save_player(player)
+
+    # If not generated, store new coords
+    if (not is_generated) and model_filename:
+        maps_dir = "maps"
+        map_path = os.path.join(maps_dir, model_filename)
+        if os.path.exists(map_path):
+            with open(map_path, "r") as f:
+                existing_data = json.load(f)
+            existing_data["player_x"] = player.x
+            existing_data["player_y"] = player.y
+            from map_io_storage import save_map_file
+            save_map_file(map_path, existing_data)
+
+
+def parse_and_run_play(stdscr, filename_or_data, is_generated=False):
+    """
+    Similar to parse_and_run_editor, but in 'play' mode.
+    """
+    if isinstance(filename_or_data, dict):
+        raw_data = filename_or_data
+        model_filename = None
+    else:
+        model_filename = filename_or_data
+        maps_dir = "maps"
+        load_path = os.path.join(maps_dir, filename_or_data)
+        try:
+            with open(load_path, "r") as f:
+                raw_data = json.load(f)
+        except:
+            return
+
+    map_data = parse_map_dict(raw_data)
+    world_width = map_data["world_width"]
+    world_height = map_data["world_height"]
+    sinfo = map_data["scenery"]
+
+    # Load/create player
+    player = load_player()
+    if not player:
+        player = Player()
+
+    if is_generated:
+        player.x = world_width // 2
+        player.y = world_height // 2
+    else:
+        px = raw_data.get("player_x", None)
+        py = raw_data.get("player_y", None)
+        if px is not None and py is not None:
+            player.x = px
+            player.y = py
+
+    # Clamp
+    player.x = max(0, min(player.x, world_width - 1))
+    player.y = max(0, min(player.y, world_height - 1))
+
+    # Build scenery => layered format
+    placed_scenery = {}
+    for s in sinfo:
+        if "definition_id" in s:
+            x, y = s["x"], s["y"]
+            obj = SceneryObject(x, y, s["definition_id"])
+            placed_scenery.setdefault((x, y), []).append(obj)
+    placed_scenery = ensure_layered_format(placed_scenery)
+
+    # Create model & context
+    model = GameModel()
+    model.player = player
+    model.placed_scenery = placed_scenery
+    model.world_width = world_width
+    model.world_height = world_height
+    model.loaded_map_filename = None if is_generated else model_filename
+
+    context = GameContext("play")
+
+    # Instantiate curses front-end
+    game_input = CursesGameInput(stdscr)
+    game_renderer = CursesGameRenderer(stdscr)
+
+    # Start main logic loop
+    run_game_loop(model, context, game_input, game_renderer)
+
+    # Save player
+    save_player(player)
+
+    # If not generated, store new coords
+    if (not is_generated) and model_filename:
+        maps_dir = "maps"
+        map_path = os.path.join(maps_dir, model_filename)
+        if os.path.exists(map_path):
+            with open(map_path, "r") as f:
+                existing_data = json.load(f)
+            existing_data["player_x"] = player.x
+            existing_data["player_y"] = player.y
+            from map_io_storage import save_map_file
+            save_map_file(map_path, existing_data)
+
+
+# FileName: play_main.py
+# version: 3.0
+# Summary: Top-level function for entering Play mode, linking user’s map choice to parse_and_run_play.
+# Tags: play, main, engine
+
+# Note: No 'import curses' needed. We pass 'stdscr' from MenuFlowManager.
+
+# Updated to import load_map_ui from the new curses_scene_load module:
+from curses_frontend.curses_scene_load import load_map_ui
+from play_runner import parse_and_run_play
+
+def play_main(stdscr):
+    """
+    Called when user chooses 'Play' from the main menu.
+    We always load a map in play mode, then inside the game,
+    you can press 'e' to toggle to the editor if desired.
+    """
+    while True:
+        selection = load_map_ui(stdscr)
+        if not selection:
+            # user canceled => back to main menu
+            return
+
+        # If load_map_ui returns a tuple, handle it
+        if isinstance(selection, tuple):
+            action_type, actual_map = selection[0], selection[1]
+            if action_type == "EDIT_GENERATE":
+                parse_and_run_play(stdscr, actual_map, is_generated=True)
+            elif action_type == "EDIT":
+                parse_and_run_play(stdscr, actual_map, is_generated=False)
+
+        elif isinstance(selection, dict):
+            # user chose a newly generated map => run in play mode
+            parse_and_run_play(stdscr, selection, is_generated=True)
+
+        else:
+            # user picked an existing file => play mode
+            parse_and_run_play(stdscr, selection, is_generated=False)
+
+
+# FileName: engine_camera.py
+# version: 2.8 (added center_camera_on_player)
+# Summary: Implements camera logic with partial scrolling *logic only* (no curses).
+# Tags: engine, camera, scrolling
+
+from typing import Tuple
+
+def update_camera_with_deadzone(player_x: int, player_y: int,
+                                camera_x: int, camera_y: int,
+                                visible_cols: int, visible_rows: int,
+                                world_width: int, world_height: int,
+                                dead_zone: int = 3) -> Tuple[int, int]:
+    """
+    Adjust camera_x, camera_y so the player remains within the 'dead_zone' inside
+    the visible window. No direct curses calls: purely numeric logic.
+    """
+    screen_px = player_x - camera_x
+    screen_py = player_y - camera_y
+
+    # Horizontal dead-zone
+    if screen_px < dead_zone:
+        camera_x -= (dead_zone - screen_px)
+    elif screen_px > (visible_cols - dead_zone - 1):
+        camera_x += (screen_px - (visible_cols - dead_zone - 1))
+
+    # Vertical dead-zone
+    if screen_py < dead_zone:
+        camera_y -= (dead_zone - screen_py)
+    elif screen_py > (visible_rows - dead_zone - 1):
+        camera_y += (screen_py - (visible_rows - dead_zone - 1))
+
+    # Clamp to world boundaries
+    if camera_x < 0:
+        camera_x = 0
+    if camera_y < 0:
+        camera_y = 0
+    if camera_x > (world_width - visible_cols):
+        camera_x = (world_width - visible_cols)
+    if camera_y > (world_height - visible_rows):
+        camera_y = (world_height - visible_rows)
+
+    return camera_x, camera_y
+
+
+def center_camera_on_player(model,
+                            visible_cols: int,
+                            visible_rows: int) -> None:
+    """
+    Places the camera so that the player is centered in the visible area, 
+    then clamps to the map boundaries. This is typically called once 
+    at the beginning, so the camera starts out centered on the player.
+    """
+    px = model.player.x
+    py = model.player.y
+
+    # Center the camera so that px, py is in the middle
+    model.camera_x = px - (visible_cols // 2)
+    model.camera_y = py - (visible_rows // 2)
+
+    # Clamp to world boundaries
+    if model.camera_x < 0:
+        model.camera_x = 0
+    if model.camera_y < 0:
+        model.camera_y = 0
+    if model.camera_x > (model.world_width - visible_cols):
+        model.camera_x = (model.world_width - visible_cols)
+    if model.camera_y > (model.world_height - visible_rows):
+        model.camera_y = (model.world_height - visible_rows)
+
+
+# FileName: main_RetroRPG.py
+# version: 1.6
+# Summary: Main entry point for RetroRPG, handling high-level init, then calling MenuFlowManager.
+# Tags: main, entry, initialization
+
+import time
+
+def main():
+    # Defer curses import to inside the main() function, so we avoid it at top-level.
+    import curses
+    # Updated import to reference the new location for MenuFlowManager
+    from curses_frontend.curses_scene_manager import MenuFlowManager
+
+    def run_game(stdscr):
+        # Let terminal size stabilize briefly (was curses.napms(100) before)
+        time.sleep(0.1)
+
+        # Create and run the menu flow manager
+        flow_manager = MenuFlowManager(stdscr)
+        flow_manager.run()
+
+    curses.wrapper(run_game)
+
+if __name__ == "__main__":
+    main()
+
+
+# FileName: interfaces.py
+# version: 1.0
+# Summary: Provides abstract interfaces for game rendering & input systems.
+# Tags: interface, design
+
+class IGameRenderer:
+    def render(self, model):
+        """
+        Render the current state of the game model.
+        Called after the game logic updates each frame.
+        """
+        pass
+
+    def on_camera_move(self, dx, dy, model):
+        """
+        Optionally handle partial scrolling or special camera movement effects.
+        """
+        pass
+
+    def get_visible_size(self):
+        """
+        Return (visible_cols, visible_rows).
+        For example, curses might say (max_w, max_h - top_offset).
+        """
+        return (80, 25)  # fallback or placeholder
+
+
+class IGameInput:
+    def get_actions(self):
+        """
+        Return a list of high-level action strings, e.g. ["MOVE_UP", "EDITOR_TOGGLE", "QUIT"].
+        If no input is available, returns an empty list.
+        """
+        return []
+
+
+# FileName: map_io_main.py
+#
+# version: 3.2
+#
+# Summary: Handles raw map data reading/writing (JSON) and structure building,
+#          separate from UI code.
+#
+# Tags: map, io
+
+import os
+import json
+
+from map_io_storage import parse_map_dict, load_map_file, save_map_file
+
+
+def load_map_data(filename):
+    """Loads map data (JSON) from the given filename as a Python dict.
+       Returns the loaded dict or None on failure.
+    """
+    try:
+        return load_map_file(filename)
+    except:
+        return None
+
+
+def build_map_data(placed_scenery, player=None, world_width=100, world_height=100):
+    """Builds a Python dict representing the map data, with optional player
+       coordinates and the given world dimensions.
+
+       'placed_scenery' can be:
+         1) A dict-of-lists keyed by (x,y)
+         2) A dict-of-dicts keyed by (x,y)
+         3) A simple list of SceneryObjects
+
+       Returns a dict with keys [world_width, world_height, scenery, player_x, player_y].
+    """
+    map_data = {
+        "world_width": world_width,
+        "world_height": world_height,
+        "scenery": []
+    }
+
+    if player is not None:
+        map_data["player_x"] = player.x
+        map_data["player_y"] = player.y
+
+    def add_scenery_obj(obj):
+        if hasattr(obj, "x") and hasattr(obj, "y") and hasattr(obj, "definition_id"):
+            map_data["scenery"].append({
+                "x": obj.x,
+                "y": obj.y,
+                "definition_id": obj.definition_id
+            })
+
+    if isinstance(placed_scenery, dict):
+        for (tile_x, tile_y), tile_data in placed_scenery.items():
+            if isinstance(tile_data, list):
+                # Old-style: list of objects
+                for obj in tile_data:
+                    add_scenery_obj(obj)
+            elif isinstance(tile_data, dict):
+                # Possibly layered data
+                for layer_key, layer_val in tile_data.items():
+                    if isinstance(layer_val, list):
+                        for obj in layer_val:
+                            add_scenery_obj(obj)
+                    else:
+                        add_scenery_obj(layer_val)
+            else:
+                # skip if not recognized
+                pass
+    else:
+        # if it's just a list
+        for obj in placed_scenery:
+            add_scenery_obj(obj)
+
+    return map_data
+
+
+# FileName: map_io_storage.py
+# version: 1.1
+# Summary: Handles the underlying JSON I/O logic for parsing and serializing map files, separate from UI code.
+# Tags: map, io, storage
+
+import os
+import json
+
+def parse_map_dict(raw_dict):
+    """
+    Takes a raw dictionary from JSON and extracts:
+      world_width, world_height, scenery, extras
+    ignoring any 'player' keys.
+    """
+    world_width = raw_dict.get("world_width", 100)
+    world_height = raw_dict.get("world_height", 60)
+    scenery = raw_dict.get("scenery", [])
+
+    known_keys = {"world_width", "world_height", "scenery", "player_x", "player_y", "player"}
+    extras = {}
+    for k, v in raw_dict.items():
+        if k not in known_keys:
+            extras[k] = v
+
+    return {
+        "world_width": world_width,
+        "world_height": world_height,
+        "scenery": scenery,
+        "extras": extras
+    }
+
+def load_map_file(filepath):
+    """
+    Reads a JSON file from 'filepath' and returns the parsed dict.
+    Returns None if there's an error.
+    """
+    if not os.path.exists(filepath):
+        return None
+    try:
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        return data
+    except:
+        return None
+
+def save_map_file(filepath, map_data):
+    """
+    Writes 'map_data' (a dict with world_width, world_height, scenery, etc.)
+    to JSON at 'filepath'. Ignores errors.
+    """
+    try:
+        with open(filepath, "w") as f:
+            json.dump(map_data, f)
+    except:
+        pass
+
+
+# FileName: model_main.py
+# version: 1.3 (now includes editor_scenery_list, editor_scenery_index)
+# Summary: Defines the GameModel class and the GameContext class.
+# Tags: model, data, state
+
+class GameModel:
+    def __init__(self):
+        """
+        Stores the main world and player state:
+          - player
+          - placed_scenery (dict-of-layers)
+          - world_width, world_height
+          - camera_x, camera_y
+          - dirty_tiles, action_flash_info
+          - loaded_map_filename
+          - full_redraw_needed, should_quit
+          - respawn_list
+          - editor_scenery_list, editor_scenery_index (used by controls_main, etc.)
+        """
+        self.player = None
+        self.placed_scenery = {}
+        self.world_width = 100
+        self.world_height = 60
+
+        # Camera & partial updates
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dirty_tiles = set()
+        self.action_flash_info = None
+
+        # If you want to track the loaded map filename
+        self.loaded_map_filename = None
+
+        # A flag for the main loop to do a full redraw if needed
+        self.full_redraw_needed = True
+
+        # A flag for the main loop to quit
+        self.should_quit = False
+
+        # For respawning resources
+        self.respawn_list = []
+
+        # For editor mode
+        self.editor_scenery_list = []
+        self.editor_scenery_index = 0
+        self.editor_undo_stack = []
+
+
+class GameContext:
+    """
+    Holds high-level mode flags (play vs. editor) and feature toggles (respawn, etc.).
+    Moved here so that 'play_runner.py' can import it from model_main.
+    """
+    def __init__(self, mode_name="play"):
+        self.mode_name = mode_name
+        self.enable_editor_commands = False
+        self.enable_sliding = False
+        self.enable_respawn = False
+        self.require_bridge_supplies = False
+        self.enable_monster_ai = False
+        self.enable_damage = False
+
+        if mode_name == "editor":
+            self.enable_editor_commands = True
+            self.enable_sliding = False
+            self.enable_respawn = False
+            self.enable_monster_ai = False
+            self.enable_damage = False
+        elif mode_name == "play":
+            self.enable_editor_commands = False
+            self.enable_sliding = True
+            self.enable_respawn = True
+
+
+# FileName: utils_main.py
+# version: 3.5
+# Summary: Contains miscellaneous utility functions and BFS helpers.
+# Tags: utils, general
+
+import curses
+import shutil
+from typing import List, Tuple, Callable
+from collections import deque
+
+
+def get_terminal_size():
+    try:
+        size = shutil.get_terminal_size(fallback=(0, 0))
+        if size.lines >= 10 and size.columns >= 10:
+            return size.lines, size.columns
+    except:
+        pass
+    return 60, 40
+
+
+def get_front_tile(player) -> Tuple[int, int]:
+    """
+    Returns the (x, y) coordinates of the tile directly in front of the player,
+    based on player.last_move_direction.
+    """
+    fx, fy = player.x, player.y
+    if player.last_move_direction == "up":
+        fy -= 1
+    elif player.last_move_direction == "down":
+        fy += 1
+    elif player.last_move_direction == "left":
+        fx -= 1
+    elif player.last_move_direction == "right":
+        fx += 1
+    return fx, fy
+
+
+def compute_distance_map_bfs(
+    width: int,
+    height: int,
+    start_coords: List[Tuple[int, int]],
+    passable_func: Callable[[int, int], bool]
+) -> List[List[int]]:
+    """
+    Multi-source BFS that computes a distance map from all 'start_coords'.
+    Any tile for which passable_func(x, y) is True can be traversed.
+    Returns a 2D list 'distance_map[y][x]' with BFS distance from the nearest start.
+    Tiles unreachable remain at a large default (999999).
+    """
+    INF = 999999
+    distance_map = [[INF] * width for _ in range(height)]
+    queue = deque()
+
+    # Initialize queue with starting coords
+    for (sx, sy) in start_coords:
+        if 0 <= sx < width and 0 <= sy < height:
+            distance_map[sy][sx] = 0
+            queue.append((sx, sy))
+
+    # BFS
+    while queue:
+        cx, cy = queue.popleft()
+        current_dist = distance_map[cy][cx]
+        for nx, ny in [(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)]:
+            if 0 <= nx < width and 0 <= ny < height:
+                if passable_func(nx, ny):
+                    if distance_map[ny][nx] > current_dist + 1:
+                        distance_map[ny][nx] = current_dist + 1
+                        queue.append((nx, ny))
+
+    return distance_map
+
+
+def flood_fill_bfs(
+    width: int,
+    height: int,
+    start_x: int,
+    start_y: int,
+    match_func: Callable[[int, int], bool]
+) -> List[Tuple[int, int]]:
+    """
+    A BFS that returns the connected region of coordinates for which match_func(x, y) is True.
+    Starting from (start_x, start_y), it collects all valid neighbors.
+    """
+    if not (0 <= start_x < width and 0 <= start_y < height):
+        return []
+
+    if not match_func(start_x, start_y):
+        return []
+
+    visited = set()
+    queue = deque()
+    queue.append((start_x, start_y))
+    visited.add((start_x, start_y))
+
+    directions = [(0,1), (0,-1), (1,0), (-1,0)]
+    region_coords = []
+
+    while queue:
+        cx, cy = queue.popleft()
+        region_coords.append((cx, cy))
+
+        for (dx, dy) in directions:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < width and 0 <= ny < height:
+                if (nx, ny) not in visited:
+                    if match_func(nx, ny):
+                        visited.add((nx, ny))
+                        queue.append((nx, ny))
+
+    return region_coords
+

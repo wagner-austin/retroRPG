@@ -1,0 +1,8 @@
+
+Error reading file: [Errno 2] No such file or directory: '/storage/emulated/0/Documents/Pydroid3/Termux_Directory/retroRPG/retroRPG_current/curses_scene_save.py'
+
+
+
+Error reading file: [Errno 2] No such file or directory: '/storage/emulated/0/Documents/Pydroid3/Termux_Directory/retroRPG/retroRPG_current/curses_scene_load.py'
+
+
