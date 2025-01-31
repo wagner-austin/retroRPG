@@ -228,7 +228,7 @@ class MenuFlowManager:
 
         self.stdscr.nodelay(False)
         curses.curs_set(1)
-        curses.echo()
+        curses.echo(0)
 
         blank_line = " " * (max_w - 4)
         self.stdscr.addstr(row, col, blank_line)

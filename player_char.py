@@ -1,5 +1,5 @@
 # FileName: player_char.py
-# version: 1.2
+# version: 1.2 (modified for infinite map)
 # Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
 # Tags: player, character, movement
 
@@ -19,8 +19,6 @@ class Player:
         """
         A unified Player constructor that supports position, name, hp, level,
         plus a 'char' attribute for rendering.
-
-        If you'd like to load 'char' from JSON, simply add it to your load/save logic.
         """
         self.x = x
         self.y = y
@@ -54,6 +52,8 @@ class Player:
         Move the player by 1 tile in the given direction (up/down/left/right).
         If debug mode is ON & ignore_collisions is True, skip collision checks.
         Otherwise, do normal collision blocking.
+
+        NOTE: No more clamping to world boundaries for infinite map.
         """
         dx, dy = 0, 0
         if direction == "up":
@@ -72,9 +72,10 @@ class Player:
         new_x = self.x + dx
         new_y = self.y + dy
 
-        # Clamp to world boundaries
-        new_x = max(0, min(new_x, world_width - 1))
-        new_y = max(0, min(new_y, world_height - 1))
+        # Removed clamping to [0, world_width - 1] etc.
+        # We rely on collision checks or other logic instead.
+        # new_x = max(0, min(new_x, world_width - 1))
+        # new_y = max(0, min(new_y, world_height - 1))
 
         # If debug mode is ON and ignore_collisions is True, skip collision checks
         if debug.DEBUG_CONFIG["enabled"] and debug.DEBUG_CONFIG["ignore_collisions"]:

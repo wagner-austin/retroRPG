@@ -1,9 +1,7 @@
 # FileName: engine_main.py
-# version: 3.3 (updated)
+# version: 3.3 (modified for infinite map)
 #
-# Summary: Core game loop using IGameRenderer & IGameInput. 
-#          All camera logic happens here or in engine_camera.py.
-#
+# Summary: Core game loop. Camera logic has no bounding now.
 # Tags: engine, main, loop
 
 import debug
@@ -22,10 +20,8 @@ from scenery_main import get_scenery_def_id_at, apply_tile_effects
 
 def run_game_loop(model, context, game_input, game_renderer):
     """
-    The main logic loop, using IGameRenderer & IGameInput.
-    All camera logic is done here or in engine_camera.py.
-    The renderer is only told how far the camera moved
-    so it can do partial or full redraw.
+    The main loop. We remove any bounding references to world_width/height 
+    and rely on the updated camera logic (which doesn't clamp).
     """
 
     model.context = context
@@ -37,15 +33,14 @@ def run_game_loop(model, context, game_input, game_renderer):
     model.full_redraw_needed = True
     model.should_quit = False
 
-    # We’ll track how far the camera moved each frame
+    # We'll track camera movement each frame
     model.ui_scroll_dx = 0
     model.ui_scroll_dy = 0
 
     while not model.should_quit:
-        # 1) Gather input actions
+        # 1) Gather input
         actions = game_input.get_actions()
         for act in actions:
-            # Pass the action to controls logic
             did_move, want_quit = handle_common_actions(
                 act, model, game_renderer, lambda x, y: mark_dirty(model, x, y)
             )
@@ -62,13 +57,14 @@ def run_game_loop(model, context, game_input, game_renderer):
                 lambda x, y: mark_dirty(model, x, y)
             )
 
-        # If user triggered quit, skip final re-render
         if model.should_quit:
             break
 
-        # 2) Update camera logic
+        # 2) Update camera logic (no bounding)
         old_cam_x, old_cam_y = model.camera_x, model.camera_y
         visible_cols, visible_rows = game_renderer.get_visible_size()
+
+        # world_width & world_height no longer clamp the camera
         model.camera_x, model.camera_y = update_camera_with_deadzone(
             model.player.x,
             model.player.y,
@@ -76,18 +72,15 @@ def run_game_loop(model, context, game_input, game_renderer):
             model.camera_y,
             visible_cols,
             visible_rows,
-            model.world_width,
-            model.world_height,
             dead_zone=2
         )
         dx = model.camera_x - old_cam_x
         dy = model.camera_y - old_cam_y
 
-        # We'll store these deltas for the renderer
         model.ui_scroll_dx = dx
         model.ui_scroll_dy = dy
 
-        # If camera jumped more than 1 tile in any direction, do full redraw
+        # If camera jumped more than 1 tile, force full redraw
         if abs(dx) > 1 or abs(dy) > 1:
             model.full_redraw_needed = True
 
@@ -96,7 +89,7 @@ def run_game_loop(model, context, game_input, game_renderer):
         update_npcs(model, lambda x, y: mark_dirty(model, x, y))
         handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
 
-        # Sliding (if enabled) 
+        # Optional sliding
         if context.enable_sliding and not actions:
             tile_def_id = get_scenery_def_id_at(
                 model.player.x, model.player.y, model.placed_scenery
@@ -106,9 +99,8 @@ def run_game_loop(model, context, game_input, game_renderer):
                 model.player,
                 tile_def_id,
                 model.placed_scenery,
-                is_editor=context.enable_editor_commands,
-                world_width=model.world_width,
-                world_height=model.world_height
+                is_editor=context.enable_editor_commands
+                # ignoring world_width / world_height
             )
             if (model.player.x, model.player.y) != (old_px, old_py):
                 mark_dirty(model, old_px, old_py)

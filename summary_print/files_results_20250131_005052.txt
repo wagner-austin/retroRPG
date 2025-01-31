@@ -1,3 +1,83 @@
+
+# FileName: engine_interfaces.py
+# version: 1.1 (updated)
+#
+# Summary: Provides abstract interfaces for game rendering & input systems.
+# Tags: interface, design
+
+class IGameRenderer:
+    def render(self, model):
+        """
+        Render the current state of the game model.
+        Called after the game logic updates each frame.
+        """
+        pass
+
+    def get_visible_size(self):
+        """
+        Return (visible_cols, visible_rows).
+        For example, curses might say (max_w, max_h - top_offset).
+        """
+        
+        
+        return (46, 25)  # fallback or placeholder
+
+
+class IGameInput:
+    def get_actions(self):
+        """
+        Return a list of high-level action strings, e.g. ["MOVE_UP", "EDITOR_TOGGLE", "QUIT"].
+        If no input is available, returns an empty list.
+        """
+        return []
+
+
+# FileName: engine_camera.py
+# version: 2.8 (modified for infinite map)
+# Summary: Implements camera logic with no bounding.
+# Tags: engine, camera, scrolling
+
+from typing import Tuple
+
+def update_camera_with_deadzone(player_x: int, player_y: int,
+                                camera_x: int, camera_y: int,
+                                visible_cols: int, visible_rows: int,
+                                dead_zone: int = 3) -> Tuple[int, int]:
+    """
+    Adjust camera_x, camera_y so the player remains within the 'dead_zone' inside
+    the visible window. No bounding to any min/max.
+    """
+
+    screen_px = player_x - camera_x
+    screen_py = player_y - camera_y
+
+    # Horizontal dead-zone
+    if screen_px < dead_zone:
+        camera_x -= (dead_zone - screen_px)
+    elif screen_px > (visible_cols - dead_zone - 1):
+        camera_x += (screen_px - (visible_cols - dead_zone - 1))
+
+    # Vertical dead-zone
+    if screen_py < dead_zone:
+        camera_y -= (dead_zone - screen_py)
+    elif screen_py > (visible_rows - dead_zone - 1):
+        camera_y += (screen_py - (visible_rows - dead_zone - 1))
+
+    # Removed all clamping to a 'world_width'/'world_height'.
+    return camera_x, camera_y
+
+def center_camera_on_player(model, visible_cols: int, visible_rows: int) -> None:
+    """
+    Centers the camera on the player's position with no bounding.
+    """
+    px = model.player.x
+    py = model.player.y
+
+    model.camera_x = px - (visible_cols // 2)
+    model.camera_y = py - (visible_rows // 2)
+    # No clamp
+
+
 # FileName: curses_renderer.py
 # version: 3.8 (modified for infinite map)
 #
@@ -210,3 +290,152 @@ class CursesGameRenderer(IGameRenderer):
             color_name = CURRENT_THEME["text_color"]
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
+
+
+# FileName: main_RetroRPG.py
+# version: 1.6
+# Summary: Main entry point for RetroRPG, handling high-level init, then calling MenuFlowManager.
+# Tags: main, entry, initialization
+
+import time
+
+def main():
+    # Defer curses import to inside the main() function, so we avoid it at top-level.
+    import curses
+    # Updated import to reference the new location for MenuFlowManager
+    from curses_frontend.curses_scene_manager import MenuFlowManager
+
+    def run_game(stdscr):
+        # Let terminal size stabilize briefly (was curses.napms(100) before)
+        time.sleep(0.1)
+
+        # Create and run the menu flow manager
+        flow_manager = MenuFlowManager(stdscr)
+        flow_manager.run()
+
+    curses.wrapper(run_game)
+
+if __name__ == "__main__":
+    main()
+
+
+# FileName: engine_main.py
+# version: 3.3 (modified for infinite map)
+#
+# Summary: Core game loop. Camera logic has no bounding now.
+# Tags: engine, main, loop
+
+import debug
+from engine_camera import update_camera_with_deadzone, center_camera_on_player
+from engine_framerate import manage_framerate
+from controls_main import (
+    handle_common_actions,
+    handle_editor_actions,
+    handle_play_actions,
+)
+from engine_respawn import handle_respawns
+from engine_actionflash import update_action_flash
+from engine_npc import update_npcs
+from engine_network import handle_network
+from scenery_main import get_scenery_def_id_at, apply_tile_effects
+
+def run_game_loop(model, context, game_input, game_renderer):
+    """
+    The main loop. We remove any bounding references to world_width/height 
+    and rely on the updated camera logic (which doesn't clamp).
+    """
+
+    model.context = context
+
+    # Center camera on player once at start
+    visible_cols, visible_rows = game_renderer.get_visible_size()
+    center_camera_on_player(model, visible_cols, visible_rows)
+
+    model.full_redraw_needed = True
+    model.should_quit = False
+
+    # We'll track camera movement each frame
+    model.ui_scroll_dx = 0
+    model.ui_scroll_dy = 0
+
+    while not model.should_quit:
+        # 1) Gather input
+        actions = game_input.get_actions()
+        for act in actions:
+            did_move, want_quit = handle_common_actions(
+                act, model, game_renderer, lambda x, y: mark_dirty(model, x, y)
+            )
+            if want_quit:
+                model.should_quit = True
+                break
+
+            model.full_redraw_needed = handle_editor_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+            model.full_redraw_needed = handle_play_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+
+        if model.should_quit:
+            break
+
+        # 2) Update camera logic (no bounding)
+        old_cam_x, old_cam_y = model.camera_x, model.camera_y
+        visible_cols, visible_rows = game_renderer.get_visible_size()
+
+        # world_width & world_height no longer clamp the camera
+        model.camera_x, model.camera_y = update_camera_with_deadzone(
+            model.player.x,
+            model.player.y,
+            model.camera_x,
+            model.camera_y,
+            visible_cols,
+            visible_rows,
+            dead_zone=2
+        )
+        dx = model.camera_x - old_cam_x
+        dy = model.camera_y - old_cam_y
+
+        model.ui_scroll_dx = dx
+        model.ui_scroll_dy = dy
+
+        # If camera jumped more than 1 tile, force full redraw
+        if abs(dx) > 1 or abs(dy) > 1:
+            model.full_redraw_needed = True
+
+        # 3) Game updates
+        handle_network(model)
+        update_npcs(model, lambda x, y: mark_dirty(model, x, y))
+        handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
+
+        # Optional sliding
+        if context.enable_sliding and not actions:
+            tile_def_id = get_scenery_def_id_at(
+                model.player.x, model.player.y, model.placed_scenery
+            )
+            old_px, old_py = model.player.x, model.player.y
+            apply_tile_effects(
+                model.player,
+                tile_def_id,
+                model.placed_scenery,
+                is_editor=context.enable_editor_commands
+                # ignoring world_width / world_height
+            )
+            if (model.player.x, model.player.y) != (old_px, old_py):
+                mark_dirty(model, old_px, old_py)
+                mark_dirty(model, model.player.x, model.player.y)
+
+        update_action_flash(model, lambda x, y: mark_dirty(model, x, y))
+
+        # 4) Rendering
+        game_renderer.render(model)
+        model.dirty_tiles.clear()
+
+        # 5) Framerate
+        manage_framerate(20)
+
+def mark_dirty(model, x, y):
+    model.dirty_tiles.add((x, y))
+

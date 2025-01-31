@@ -20,11 +20,11 @@ from .curses_art_skins import (
 
 THEMES = {
     "default": {
-        "border_color":              "UI_CYAN",
-        "title_color":               "UI_WHITE_ON_BLUE",
+        "border_color":              "white_on_black",
+        "title_color":               "green_on_black",
         "instructions_color":        "UI_MAGENTA",
-        "text_color":                "YELLOW_TEXT",
-        "ascii_art_color":           "ASCII_ART",
+        "text_color":                "white_on_black",
+        "ascii_art_color":           "red_on_black",
 
         "highlight_selected_color":   "YELLOW_TEXT",
         "highlight_unselected_color": "WHITE_TEXT",
