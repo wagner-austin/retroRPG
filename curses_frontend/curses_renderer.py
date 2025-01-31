@@ -1,5 +1,5 @@
 # FileName: curses_renderer.py
-# version: 3.8 (modified for infinite map)
+# version: 3.9 (modified for infinite map)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer.
 #          Renders only the camera region, ignoring world_width/height.
@@ -26,6 +26,21 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.nodelay(True)
         self.stdscr.keypad(True)
         curses.curs_set(0)
+
+    def get_visible_size(self):
+        """
+        Overridden to return the actual curses screen size minus any offsets.
+        This replaces the (46,25) fallback from the base interface.
+        """
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        # Subtract top offset if used for a UI frame or status line, etc.
+        visible_rows = max_h - self.map_top_offset
+        if visible_rows < 0:
+            visible_rows = 0  # safety check
+
+        visible_cols = max_w
+        return (visible_cols, visible_rows)
 
     def render_scene(self, model, scene_layers):
         self.stdscr.erase()
@@ -56,6 +71,7 @@ class CursesGameRenderer(IGameRenderer):
             self._full_redraw(model)
             model.full_redraw_needed = False
         else:
+            # Partial scroll only for ±1 row in Y
             if dx == 0 and abs(dy) == 1:
                 self._partial_scroll(dy, model)
             else:
@@ -113,7 +129,6 @@ class CursesGameRenderer(IGameRenderer):
         visible_cols = max_w
         visible_rows = max_h - self.map_top_offset
 
-        # No bounding with model.world_width/model.world_height.
         for wx in range(model.camera_x, model.camera_x + visible_cols):
             for wy in range(model.camera_y, model.camera_y + visible_rows):
                 model.dirty_tiles.add((wx, wy))
@@ -123,7 +138,6 @@ class CursesGameRenderer(IGameRenderer):
     def _update_dirty_tiles(self, model):
         max_h, max_w = self.stdscr.getmaxyx()
 
-        # No bounding check on world_width/height anymore.
         for (wx, wy) in model.dirty_tiles:
             sx = wx - model.camera_x
             sy = wy - model.camera_y + self.map_top_offset
