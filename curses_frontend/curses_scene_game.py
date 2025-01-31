@@ -10,7 +10,7 @@ from .curses_input import CursesGameInput
 from .curses_renderer import CursesGameRenderer
 from engine_main import run_game_loop
 
-def run_game_scene(stdscr, model, context):
+def game_scene_ui(stdscr, model, context):
     """
     Sets up the curses-based input & rendering, then runs the main game loop
     with the given model & context. Returns when the loop ends.

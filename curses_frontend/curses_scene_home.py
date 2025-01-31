@@ -16,7 +16,7 @@ from .curses_animations import _draw_art
 from .curses_art_skins import MAIN_MENU_ART
 from .curses_highlight import draw_global_selector_line
 
-def scene_home_screen(stdscr):
+def home_scene_ui(stdscr):
     """
     The main 'home screen' with a static ASCII banner (optional)
     and a simple menu for Play/Quit/Settings. Returns:

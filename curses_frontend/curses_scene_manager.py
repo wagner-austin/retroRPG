@@ -4,20 +4,20 @@
 # Summary: Contains the high-level MenuFlowManager class that organizes
 #          the main menu screens (HOME, SETTINGS, PLAY, EDIT).
 #          Now uses 'play_runner' purely for building the model,
-#          then calls 'curses_scene_game.run_game_scene' to do curses I/O,
+#          then calls 'curses_scene_game.game_scene_ui' to do curses I/O,
 #          and finally saves state as needed.
 #
 # Tags: scene, menu, manager
 
-import curses
-import debug
+#import curses
+#import debug
 import os
 import json
 
-from .curses_scene_home import scene_home_screen
-from .curses_scene_settings import run_settings_scene
-from .curses_scene_load import load_map_ui
-from .curses_scene_game import run_game_scene
+from .curses_scene_home import home_scene_ui
+from .curses_scene_settings import settings_scene_ui
+from .curses_scene_load import load_scene_ui
+from .curses_scene_game import game_scene_ui
 from player_char_io import save_player
 from map_io_storage import save_map_file
 from play_runner import (
@@ -28,8 +28,8 @@ from play_runner import (
 
 class MenuFlowManager:
     """
-    A controller that organizes the main menu screens (HOME, SETTINGS, PLAY).
-    The PLAY flow loads or generates a map, then calls run_game_scene(...) for
+    A controller that organizes the main menu screens (HOME, SETTINGS, GAME).
+    The GAME flow loads or generates a map, then calls game_scene_ui(...) for
     actual gameplay/editor usage. Finally, we update the player's data or map file
     if needed, then return to the main menu or quit.
     """
@@ -42,7 +42,7 @@ class MenuFlowManager:
     def run(self):
         while self.running:
             if self.current_state == "HOME":
-                choice = scene_home_screen(self.stdscr)
+                choice = home_scene_ui(self.stdscr)
                 if choice == 1:  # Play
                     self.current_state = "PLAY"
                 elif choice == 2:  # Quit
@@ -53,7 +53,7 @@ class MenuFlowManager:
             elif self.current_state == "PLAY":
                 # Keep letting the user pick a map or “Generate new” until they cancel
                 while True:
-                    selection = load_map_ui(self.stdscr)
+                    selection = load_scene_ui(self.stdscr)
                     if not selection:
                         # user canceled => back to main menu
                         self.current_state = "HOME"
@@ -65,7 +65,7 @@ class MenuFlowManager:
                         if not model:
                             self.current_state = "HOME"
                             break
-                        run_game_scene(self.stdscr, model, context)
+                        game_scene_ui(self.stdscr, model, context)
                         # Save the player after the loop
                         save_player(model.player)
                         # No file to update since it's a brand-new procedural map
@@ -77,7 +77,7 @@ class MenuFlowManager:
                         if not model:
                             self.current_state = "HOME"
                             break
-                        run_game_scene(self.stdscr, model, context)
+                        game_scene_ui(self.stdscr, model, context)
                         save_player(model.player)
                         continue
 
@@ -97,7 +97,7 @@ class MenuFlowManager:
                             break
 
                         # Run the editor “scene”
-                        run_game_scene(self.stdscr, model, context)
+                        game_scene_ui(self.stdscr, model, context)
                         # Save the player after the loop
                         save_player(model.player)
 
@@ -117,7 +117,7 @@ class MenuFlowManager:
                         self.current_state = "HOME"
                         break
 
-                    run_game_scene(self.stdscr, model, context)
+                    game_scene_ui(self.stdscr, model, context)
                     save_player(model.player)
 
                     # If we loaded from an actual file, store new x,y
@@ -131,7 +131,7 @@ class MenuFlowManager:
                 # Done handling all “PLAY” cycles
 
             elif self.current_state == "SETTINGS":
-                run_settings_scene(self.stdscr)
+                settings_scene_ui(self.stdscr)
                 self.current_state = "HOME"
 
             elif self.current_state == "QUIT":

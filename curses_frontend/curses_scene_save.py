@@ -41,7 +41,7 @@ def prompt_for_filename(stdscr, prompt):
     _restore_input_mode(stdscr)
     return ""
 
-def save_map_ui(stdscr, placed_scenery, player=None,
+def save_map_ui (stdscr, placed_scenery, player=None,
                 world_width=100, world_height=100,
                 filename_override=None, notify_overwrite=False):
     """

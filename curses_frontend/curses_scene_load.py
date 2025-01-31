@@ -13,7 +13,7 @@ import debug
 from procedural_map_generator.generator import generate_procedural_map
 from .curses_scene_file_select import select_map_file
 
-def load_map_ui(stdscr):
+def load_scene_ui (stdscr):
     """
     The user flow for loading a map or generating a new one.
     Returns either:

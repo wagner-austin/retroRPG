@@ -10,7 +10,7 @@ import curses
 import debug
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
 
-def run_settings_scene(stdscr):
+def settings_scene_ui (stdscr):
     """
     A placeholder 'Settings' screen. Press 'q' or ESC to return to the main menu.
     """
