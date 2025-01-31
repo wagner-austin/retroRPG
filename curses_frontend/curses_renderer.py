@@ -22,6 +22,7 @@ class CursesGameRenderer(IGameRenderer):
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.map_top_offset = 3
+        self.map_side_offset = 0
 
         self.stdscr.nodelay(True)
         self.stdscr.keypad(True)
@@ -39,7 +40,7 @@ class CursesGameRenderer(IGameRenderer):
         if visible_rows < 0:
             visible_rows = 0  # safety check
 
-        visible_cols = max_w
+        visible_cols = max_w - self.map_side_offset
         return (visible_cols, visible_rows)
 
     def render_scene(self, model, scene_layers):
@@ -67,48 +68,18 @@ class CursesGameRenderer(IGameRenderer):
         dx = getattr(model, "ui_scroll_dx", 0)
         dy = getattr(model, "ui_scroll_dy", 0)
 
-        if model.full_redraw_needed:
+        # Instead of partial scrolling, always do a full redraw if the camera moved.
+        if model.full_redraw_needed or dx != 0 or dy != 0:
             self._full_redraw(model)
             model.full_redraw_needed = False
         else:
-            # Partial scroll only for ±1 row in Y
-            if dx == 0 and abs(dy) == 1:
-                self._partial_scroll(dy, model)
-            else:
-                self._update_dirty_tiles(model)
+            self._update_dirty_tiles(model)
 
         model.ui_scroll_dx = 0
         model.ui_scroll_dy = 0
 
         self.stdscr.noutrefresh()
         curses.doupdate()
-
-    def _partial_scroll(self, dy, model):
-        """
-        When camera moves by ±1 row, we do a partial scroll for performance.
-        """
-        max_h, max_w = self.stdscr.getmaxyx()
-        self.stdscr.setscrreg(self.map_top_offset, max_h - 1)
-
-        try:
-            if dy == 1:
-                # Scrolling down
-                self.stdscr.scroll(1)
-                new_row = model.camera_y + (max_h - self.map_top_offset) - 1
-                for col in range(model.camera_x, model.camera_x + max_w):
-                    model.dirty_tiles.add((col, new_row))
-            elif dy == -1:
-                # Scrolling up
-                self.stdscr.scroll(-1)
-                new_row = model.camera_y
-                for col in range(model.camera_x, model.camera_x + max_w):
-                    model.dirty_tiles.add((col, new_row))
-        except curses.error:
-            # If partial scrolling fails, just force full redraw
-            model.full_redraw_needed = True
-
-        self.stdscr.setscrreg(0, max_h - 1)
-        self._update_dirty_tiles(model)
 
     def _full_redraw(self, model):
         self.stdscr.clear()

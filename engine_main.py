@@ -4,7 +4,6 @@
 # Summary: Core game loop. Camera logic has no bounding now.
 # Tags: engine, main, loop
 
-import debug
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
 from engine_framerate import manage_framerate
 from controls_main import (
