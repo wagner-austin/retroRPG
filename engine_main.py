@@ -1,11 +1,12 @@
 # FileName: engine_main.py
-# version: 3.2
-# Summary: Core game loop using IGameRenderer & IGameInput. Skips final render if should_quit is set.
+# version: 3.3 (updated)
+#
+# Summary: Core game loop using IGameRenderer & IGameInput. 
+#          All camera logic happens here or in engine_camera.py.
+#
 # Tags: engine, main, loop
 
-import time
 import debug
-
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
 from engine_framerate import manage_framerate
 from controls_main import (
@@ -17,12 +18,14 @@ from engine_respawn import handle_respawns
 from engine_actionflash import update_action_flash
 from engine_npc import update_npcs
 from engine_network import handle_network
-from scenery_main import (get_scenery_def_id_at, apply_tile_effects)
+from scenery_main import get_scenery_def_id_at, apply_tile_effects
 
 def run_game_loop(model, context, game_input, game_renderer):
     """
-    The main logic loop, using IGameRenderer & IGameInput. 
-    Engine code here does NOT import curses or do curses calls.
+    The main logic loop, using IGameRenderer & IGameInput.
+    All camera logic is done here or in engine_camera.py.
+    The renderer is only told how far the camera moved
+    so it can do partial or full redraw.
     """
 
     model.context = context
@@ -33,6 +36,10 @@ def run_game_loop(model, context, game_input, game_renderer):
 
     model.full_redraw_needed = True
     model.should_quit = False
+
+    # We’ll track how far the camera moved each frame
+    model.ui_scroll_dx = 0
+    model.ui_scroll_dy = 0
 
     while not model.should_quit:
         # 1) Gather input actions
@@ -59,7 +66,7 @@ def run_game_loop(model, context, game_input, game_renderer):
         if model.should_quit:
             break
 
-        # 2) Camera logic
+        # 2) Update camera logic
         old_cam_x, old_cam_y = model.camera_x, model.camera_y
         visible_cols, visible_rows = game_renderer.get_visible_size()
         model.camera_x, model.camera_y = update_camera_with_deadzone(
@@ -76,19 +83,20 @@ def run_game_loop(model, context, game_input, game_renderer):
         dx = model.camera_x - old_cam_x
         dy = model.camera_y - old_cam_y
 
-        # If camera jumped more than 1 tile, do a full redraw
+        # We'll store these deltas for the renderer
+        model.ui_scroll_dx = dx
+        model.ui_scroll_dy = dy
+
+        # If camera jumped more than 1 tile in any direction, do full redraw
         if abs(dx) > 1 or abs(dy) > 1:
             model.full_redraw_needed = True
-        else:
-            if dx != 0 or dy != 0:
-                game_renderer.on_camera_move(dx, dy, model)
 
         # 3) Game updates
         handle_network(model)
         update_npcs(model, lambda x, y: mark_dirty(model, x, y))
         handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
 
-        # If sliding is enabled, move player if no new actions
+        # Sliding (if enabled) 
         if context.enable_sliding and not actions:
             tile_def_id = get_scenery_def_id_at(
                 model.player.x, model.player.y, model.placed_scenery

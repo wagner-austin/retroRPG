@@ -1,6 +1,7 @@
 # FileName: map_io_storage.py
-# version: 1.1
-# Summary: Handles the underlying JSON I/O logic for parsing and serializing map files, separate from UI code.
+# version: 1.2
+# Summary: Handles underlying JSON I/O logic for parsing and serializing map files,
+#          separate from UI code.
 # Tags: map, io, storage
 
 import os
@@ -9,7 +10,7 @@ import json
 def parse_map_dict(raw_dict):
     """
     Takes a raw dictionary from JSON and extracts:
-      world_width, world_height, scenery, extras
+      - world_width, world_height, scenery, extras
     ignoring any 'player' keys.
     """
     world_width = raw_dict.get("world_width", 100)
@@ -32,7 +33,7 @@ def parse_map_dict(raw_dict):
 def load_map_file(filepath):
     """
     Reads a JSON file from 'filepath' and returns the parsed dict.
-    Returns None if there's an error.
+    Returns None if there's an error or if the file doesn't exist.
     """
     if not os.path.exists(filepath):
         return None
@@ -47,8 +48,13 @@ def save_map_file(filepath, map_data):
     """
     Writes 'map_data' (a dict with world_width, world_height, scenery, etc.)
     to JSON at 'filepath'. Ignores errors.
+    Auto-creates the directory if needed.
     """
     try:
+        dir_name = os.path.dirname(filepath)
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+
         with open(filepath, "w") as f:
             json.dump(map_data, f)
     except:

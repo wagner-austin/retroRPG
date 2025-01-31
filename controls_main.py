@@ -1,7 +1,8 @@
 # FileName: controls_main.py
-# version: 2.14
+# version: 2.15
 # Summary: Interprets user input actions for both play and editor modes.
-#          No direct curses usage; we rely on action strings from IGameInput.
+#          No direct curses usage. We rely on action strings from IGameInput.
+#          UI calls (quick save, yes/no prompts) are delegated to controls_ui.py.
 # Tags: controls, input, main
 
 import time
@@ -12,6 +13,9 @@ from scenery_main import (
     append_scenery
 )
 from utils_main import get_front_tile
+
+# IMPORT the new UI helpers:
+from curses_frontend.curses_controls_ui import perform_quick_save, prompt_yes_no
 
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
@@ -28,60 +32,21 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
     did_move = False
     should_quit = False
 
-    def _perform_quick_save():
-        """Called when user triggers SAVE_QUICK."""
-        if not renderer:
-            return
-        if not hasattr(renderer, "get_curses_window"):
-            return
-        ui_win = renderer.get_curses_window()
-        if not ui_win:
-            return
-
-        from curses_frontend.curses_map_ui import save_map_ui
-        if model.loaded_map_filename:
-            # Overwrite existing
-            save_map_ui(
-                ui_win,
-                model.placed_scenery,
-                player=model.player,
-                world_width=model.world_width,
-                world_height=model.world_height,
-                filename_override=model.loaded_map_filename
-            )
-        else:
-            # Prompt user for new name
-            save_map_ui(
-                ui_win,
-                model.placed_scenery,
-                player=model.player,
-                world_width=model.world_width,
-                world_height=model.world_height,
-                filename_override=None
-            )
-        model.full_redraw_needed = True
-
-    def _prompt_yes_no(question):
-        """Use renderer's 'prompt_yes_no' if available."""
-        if not renderer:
-            return False
-        if not hasattr(renderer, "prompt_yes_no"):
-            return False
-        return renderer.prompt_yes_no(question)
-
     # ACTION HANDLERS:
 
     if action == "YES_QUIT":
         # "YES_QUIT" typically means user confirmed they want to quit
         if model.loaded_map_filename:
-            _perform_quick_save()
+            # If we have a filename, quick-save directly to that file
+            perform_quick_save(model, renderer)
             should_quit = True
         else:
-            # Generated => ask user
-            save_decision = _prompt_yes_no("Save this generated map? (y/n)")
+            # For a generated map with no filename, prompt to save
+            save_decision = prompt_yes_no(renderer, "Save this generated map? (y/n)")
             if save_decision:
-                _perform_quick_save()
+                perform_quick_save(model, renderer)
             should_quit = True
+
         return (did_move, should_quit)
 
     elif action == "MOVE_UP":
@@ -125,6 +90,7 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
         model.full_redraw_needed = True
 
     elif action == "EDITOR_TOGGLE":
+        # Toggle between play and editor contexts
         if context.mode_name == "play":
             context.mode_name = "editor"
             context.enable_editor_commands = True
@@ -144,7 +110,8 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
         model.full_redraw_needed = True
 
     elif action == "SAVE_QUICK":
-        _perform_quick_save()
+        # The user triggered a quick save
+        perform_quick_save(model, renderer)
 
     return (did_move, should_quit)
 
@@ -243,6 +210,7 @@ def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_
             player.wood += 1
             full_redraw_needed = True
 
+            # If there's a TreeTop directly above trunk, remove it too
             top_objs = get_objects_at(from_scenery, fx, fy - 1)
             top_o = next((o for o in top_objs if o.definition_id == "TreeTop"), None)
             if top_o:

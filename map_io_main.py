@@ -1,10 +1,7 @@
 # FileName: map_io_main.py
-#
-# version: 3.2
-#
-# Summary: Handles raw map data reading/writing (JSON) and structure building,
-#          separate from UI code.
-#
+# version: 3.3
+# Summary: Higher-level map data read/write (JSON) and structure building,
+#          separate from UI code. Uses map_io_storage for the actual file ops.
 # Tags: map, io
 
 import os
@@ -12,27 +9,28 @@ import json
 
 from map_io_storage import parse_map_dict, load_map_file, save_map_file
 
-
 def load_map_data(filename):
-    """Loads map data (JSON) from the given filename as a Python dict.
-       Returns the loaded dict or None on failure.
+    """
+    Loads map data (JSON) from the given filename as a Python dict.
+    Returns the loaded dict or None on failure.
     """
     try:
         return load_map_file(filename)
     except:
         return None
 
+def build_map_data(placed_scenery, player=None,
+                   world_width=100, world_height=100):
+    """
+    Builds a Python dict representing the map data, with optional player
+    coordinates and the given world dimensions.
 
-def build_map_data(placed_scenery, player=None, world_width=100, world_height=100):
-    """Builds a Python dict representing the map data, with optional player
-       coordinates and the given world dimensions.
+    'placed_scenery' can be:
+      1) A dict-of-lists keyed by (x,y)
+      2) A dict-of-dicts keyed by (x,y)
+      3) A simple list of SceneryObjects
 
-       'placed_scenery' can be:
-         1) A dict-of-lists keyed by (x,y)
-         2) A dict-of-dicts keyed by (x,y)
-         3) A simple list of SceneryObjects
-
-       Returns a dict with keys [world_width, world_height, scenery, player_x, player_y].
+    Returns a dict with keys [world_width, world_height, scenery, player_x, player_y].
     """
     map_data = {
         "world_width": world_width,
@@ -52,6 +50,7 @@ def build_map_data(placed_scenery, player=None, world_width=100, world_height=10
                 "definition_id": obj.definition_id
             })
 
+    # If it's a dict, we might have nested or layered data
     if isinstance(placed_scenery, dict):
         for (tile_x, tile_y), tile_data in placed_scenery.items():
             if isinstance(tile_data, list):
@@ -70,7 +69,7 @@ def build_map_data(placed_scenery, player=None, world_width=100, world_height=10
                 # skip if not recognized
                 pass
     else:
-        # if it's just a list
+        # If it's just a list
         for obj in placed_scenery:
             add_scenery_obj(obj)
 
