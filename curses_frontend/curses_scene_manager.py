@@ -241,7 +241,7 @@ class MenuFlowManager:
             if c in (ord('y'), ord('Y')):
                 self._restore_input_mode()
                 return True
-            elif c in (ord('n'), ord('N'), 27):
+            elif c in (ord ('q'), ord ('Q'), ord('n'), ord('N'), 27):
                 self._restore_input_mode()
                 return False
 
