@@ -15,13 +15,13 @@ from .curses_scene_settings import settings_scene_ui
 from .curses_scene_load import load_scene_ui
 from .curses_scene_game import game_scene_ui
 from .curses_color_init import init_colors
-from .curses_controls_ui import prompt_yes_no
+#from .curses_controls_ui import prompt_yes_no
 
 # We now import the dedicated save logic from curses_scene_save
 from .curses_scene_save import handle_post_game_scene_save
 
 from player_char_io import save_player
-from play_runner import build_model_for_play, build_model_for_editor
+from play_runner import build_model_for_play
 
 
 class MenuFlowManager:
@@ -82,17 +82,10 @@ class MenuFlowManager:
                         handle_post_game_scene_save(self.stdscr, model)
                         continue
 
-                    # 3) A tuple => Editor mode
-                    if isinstance(selection, tuple):
-                        action_type, actual_map = selection
-                        if action_type == "EDIT_GENERATE":
-                            model, context = build_model_for_editor({}, is_generated=True)
-                        elif action_type == "EDIT":
-                            model, context = build_model_for_editor(actual_map, is_generated=False)
-                        else:
-                            self.current_state = "HOME"
-                            break
-
+                    # 3) A string => existing map filename
+                    if isinstance(selection, str):
+                        filename = selection
+                        model, context = build_model_for_play(filename, is_generated=False)
                         if not model:
                             self.current_state = "HOME"
                             break
@@ -100,18 +93,6 @@ class MenuFlowManager:
                         game_scene_ui(self.stdscr, model, context)
                         save_player(model.player)
                         handle_post_game_scene_save(self.stdscr, model)
-                        continue
-
-                    # 4) A string => existing map filename
-                    filename = selection
-                    model, context = build_model_for_play(filename, is_generated=False)
-                    if not model:
-                        self.current_state = "HOME"
-                        break
-
-                    game_scene_ui(self.stdscr, model, context)
-                    save_player(model.player)
-                    handle_post_game_scene_save(self.stdscr, model)
 
             elif self.current_state == "SETTINGS":
                 settings_scene_ui(self.stdscr)

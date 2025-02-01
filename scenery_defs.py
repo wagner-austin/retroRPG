@@ -27,7 +27,7 @@ DEBUG_DOT_ID        = "DebugDot"
 # LOAD SCENERY DEFINITIONS FROM NEW PYTHON FILE
 #############################
 # Instead of reading from a JSON file, we import the dictionary directly:
-from scenery_defs_data import ALL_SCENERY_DEFS
+from where_scenery_lives import ALL_SCENERY_DEFS
 
 def build_forward_map():
     """

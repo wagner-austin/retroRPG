@@ -7,7 +7,7 @@
 #
 # Tags: themes, curses
 
-from .curses_art_skins import (
+from .where_curses_art_lives import (
     HEADER_ART,
     LOADING_ART,
     HOMESCREEN_ART,

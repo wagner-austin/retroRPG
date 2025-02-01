@@ -1,10 +1,9 @@
-# FileName: controls_ui.py
+# FileName: curses_y_or_no_quicksave.py
 #
 # version: 1.0
 #
-# Summary: Provides UI-related helpers for controls, including quick-saving
-#          (which uses curses_scene_save) and yes/no prompts using the renderer.
-#
+# Summary: Provides UI-related helpers for controls, including quick-saving (which uses curses_scene_save) and yes/no prompts using the renderer.
+
 # Tags: controls, ui
 
 def prompt_yes_no(renderer, question):

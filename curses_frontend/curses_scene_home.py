@@ -13,7 +13,7 @@ import debug
 from .curses_common import draw_screen_frame, draw_title
 from .curses_animations import _draw_art
 from .curses_highlight import draw_global_selector_line
-from .curses_themes import CURRENT_THEME
+from .where_curses_themes_lives import CURRENT_THEME
 
 
 def home_scene_ui(stdscr):

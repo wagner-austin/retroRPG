@@ -1,7 +1,6 @@
 # FileName: scenery_defs_data.py
 # version: 1.0
-# Summary: Holds the dictionary that was previously in scenery_defs_data.json,
-#          now using string-based color_name instead of numeric ascii_color.
+# Summary: Holds the dictionary that was previously in scenery_defs_data.json, now using string-based color_name instead of numeric ascii_color.
 # Tags: data, scenery
 
 ALL_SCENERY_DEFS = {

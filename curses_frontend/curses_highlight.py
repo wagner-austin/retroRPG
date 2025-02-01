@@ -9,7 +9,7 @@
 import curses
 from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, get_color_attr
-from .curses_themes import CURRENT_THEME
+from .where_curses_themes_lives import CURRENT_THEME
 
 GLOBAL_HIGHLIGHT_CONFIG = {
     # We set them to None; we will fetch from CURRENT_THEME at runtime.

@@ -14,7 +14,7 @@ from engine_interfaces import IGameRenderer
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
-from .curses_themes import CURRENT_THEME
+from .where_curses_themes_lives import CURRENT_THEME
 
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
@@ -175,6 +175,7 @@ class CursesGameRenderer(IGameRenderer):
             player_color = f"white_on_{bg_floor}"
             attr_bold = get_color_attr(player_color, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
+            #i don't like that the character is hard coded here. I want the character changeable from one file
 
             # If there's a tree trunk/top in the same tile, it goes on top of the player
             objects_list = tile_layers.get(OBJECTS_LAYER, [])

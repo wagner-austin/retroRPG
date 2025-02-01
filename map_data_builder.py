@@ -1,23 +1,8 @@
-# FileName: map_io_main.py
+# FileName: map_data_builder.py
 # version: 3.3
-# Summary: Higher-level map data read/write (JSON) and structure building,
-#          separate from UI code. Uses map_io_storage for the actual file ops.
+# Summary: Higher-level map data read (JSON) and structure building, separate from UI code. Uses map_io_storage for the actual file ops.
 # Tags: map, io
 
-import os
-import json
-
-from map_io_storage import parse_map_dict, load_map_file, save_map_file
-
-def load_map_data(filename):
-    """
-    Loads map data (JSON) from the given filename as a Python dict.
-    Returns the loaded dict or None on failure.
-    """
-    try:
-        return load_map_file(filename)
-    except:
-        return None
 
 def build_map_data(placed_scenery, player=None,
                    world_width=100, world_height=100):

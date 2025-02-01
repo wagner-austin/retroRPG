@@ -16,7 +16,7 @@ def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str =
     Draw a title string at the given row. If color_name is not provided,
     use CURRENT_THEME's 'title_color'.
     """
-    from .curses_themes import CURRENT_THEME
+    from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["title_color"]
 
@@ -32,7 +32,7 @@ def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int 
     Draws a list of instruction lines near the bottom of the screen. 
     If color_name not provided, use CURRENT_THEME's 'instructions_color'.
     """
-    from .curses_themes import CURRENT_THEME
+    from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["instructions_color"]
 
@@ -55,7 +55,7 @@ def draw_screen_frame(stdscr: curses.window, color_name: str = None) -> None:
     Draws a rectangular border around the entire screen, plus a "Debug mode" label if debug is enabled.
     If color_name not provided, use CURRENT_THEME's 'border_color'.
     """
-    from .curses_themes import CURRENT_THEME
+    from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["border_color"]
 

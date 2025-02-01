@@ -11,14 +11,14 @@
 import curses
 import debug
 
-import map_io_main
+from map_data_builder import build_map_data
 from map_io_storage import save_map_file
 from map_list_logic import file_exists_in_maps_dir, get_map_list
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
 from .curses_animations import _draw_art
-from .curses_themes import CURRENT_THEME
-from curses_frontend.curses_controls_ui import prompt_yes_no
+from .where_curses_themes_lives import CURRENT_THEME
+from curses_frontend.curses_y_or_n_prompt_quicksave import prompt_yes_no
 
 
 def handle_post_game_scene_save(stdscr, model):
@@ -127,7 +127,7 @@ def save_map_ui(stdscr,
     file_existed = file_exists_in_maps_dir(filename)
 
     # Build the map data from the given scenery/player
-    map_data = map_io_main.build_map_data(
+    map_data = build_map_data(
         placed_scenery,
         player=player,
         world_width=world_width,

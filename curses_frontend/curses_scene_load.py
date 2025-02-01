@@ -12,7 +12,7 @@ import debug
 from procedural_map_generator.generator import generate_procedural_map
 from .curses_common import draw_screen_frame, draw_title, draw_instructions
 from .curses_animations import _draw_art
-from .curses_themes import CURRENT_THEME
+from .where_curses_themes_lives import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_highlight import draw_global_selector_line
 
@@ -25,7 +25,6 @@ def load_scene_ui(stdscr):
     Returns either:
       - "" if canceled,
       - a dict if user picks "Generate a new map",
-      - a tuple like ("EDIT", filename) or ("EDIT_GENERATE", data),
       - or just the filename string if user loads an existing map.
     """
     while True:
@@ -39,15 +38,6 @@ def load_scene_ui(stdscr):
             data = generate_procedural_map()
             return data
 
-        if isinstance(selection, tuple):
-            # The "EDITOR" variants
-            action_type, actual_map = selection
-            if action_type == "EDIT_GENERATE":
-                data = generate_procedural_map()
-                return (action_type, data)
-            elif action_type == "EDIT":
-                return (action_type, actual_map)
-
         elif isinstance(selection, dict):
             return selection
 
@@ -59,8 +49,7 @@ def load_scene_ui(stdscr):
 def select_map_file_load_mode(stdscr):
     """
     Displays a list of .json map files in 'maps' directory for load usage.
-    Returns "GENERATE", a filename string, "", or a tuple like ("EDIT", filename),
-    or ("EDIT_GENERATE", None).
+    Returns "GENERATE", a filename string, "", or a tuple like ("EDIT", filename)
     """
     files = get_map_list(maps_dir="maps", extension=".json")
     return _select_map_file_load_mode(stdscr, files)
@@ -68,7 +57,7 @@ def select_map_file_load_mode(stdscr):
 
 def _select_map_file_load_mode(stdscr, files):
     # Insert "Generate a new map>" at index 0
-    files.insert(0, "0) Generate a new map>")
+    files.insert(0, "Generate a new map>")
 
     selected_index = 0
     frame_count = 0
@@ -127,12 +116,7 @@ def _select_map_file_load_mode(stdscr, files):
                         del files[selected_index]
                         if selected_index >= len(files):
                             selected_index = len(files) - 1
-        elif key == ord('e'):
-            # Editor mode
-            if selected_index == 0:
-                return ("EDIT_GENERATE", None)
-            else:
-                return ("EDIT", files[selected_index])
+
         elif ord('0') <= key <= ord('9'):
             # Quick numeric selection
             typed = key - ord('0')
@@ -149,10 +133,7 @@ def _select_map_file_load_mode(stdscr, files):
 def prompt_delete_confirmation(stdscr, filename):
     """
     Prompt the user: 'Delete X? (y/n)'. Return True if 'y', else False.
-    This is independent from the main 'map leaving' logic, so we keep 'y' here if you wish,
-    or you can also update to 'q' if you want the same approach.
     """
-    from .curses_themes import CURRENT_THEME
 
     max_h, max_w = stdscr.getmaxyx()
     question = f"Delete '{filename}'? (y/n)"  # We can keep 'y' for delete confirmation, or change to 'q'.
@@ -170,7 +151,6 @@ def prompt_delete_confirmation(stdscr, filename):
 
     while True:
         c = stdscr.getch()
-        # If you also want to switch to 'q' for delete, do so here.
         if c in (ord('y'), ord('Y')):
             _restore_input_mode(stdscr)
             return True

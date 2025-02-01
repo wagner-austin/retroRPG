@@ -17,7 +17,7 @@ from scenery_core import (
 from utils_main import get_front_tile
 
 # IMPORT the new UI helpers:
-from curses_frontend.curses_controls_ui import perform_quick_save, prompt_yes_no
+from curses_frontend.curses_y_or_n_prompt_quicksave import perform_quick_save, prompt_yes_no
 
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
@@ -127,6 +127,7 @@ def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirt
       - NEXT_ITEM => cycle object forward
       - PREV_ITEM => cycle object backward
     """
+    #I believe this is what tells the map to redraw when entering or exiting editor mode ?
     if not model.context.enable_editor_commands:
         return full_redraw_needed
 
@@ -134,7 +135,7 @@ def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirt
     editor_scenery_index = model.editor_scenery_index
     player = model.player
 
-    from scenery_objects_main import (
+    from scenery_placement_utils import (
         place_scenery_item,
     )
 
@@ -191,6 +192,7 @@ def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_
     """
     Play-mode only actions: e.g. INTERACT => chop/mine
     """
+    #Full redraw between editor and play mode switch in game
     if model.context.enable_editor_commands:
         return full_redraw_needed
 
