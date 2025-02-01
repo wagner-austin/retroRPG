@@ -15,8 +15,9 @@ from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
 from .curses_themes import CURRENT_THEME
+
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
-from scenery_main import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
+from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
 
 class CursesGameRenderer(IGameRenderer):
     def __init__(self, stdscr):
@@ -31,14 +32,12 @@ class CursesGameRenderer(IGameRenderer):
     def get_visible_size(self):
         """
         Overridden to return the actual curses screen size minus any offsets.
-        This replaces the (46,25) fallback from the base interface.
         """
         max_h, max_w = self.stdscr.getmaxyx()
 
-        # Subtract top offset if used for a UI frame or status line, etc.
         visible_rows = max_h - self.map_top_offset
         if visible_rows < 0:
-            visible_rows = 0  # safety check
+            visible_rows = 0
 
         visible_cols = max_w - self.map_side_offset
         return (visible_cols, visible_rows)
@@ -68,7 +67,7 @@ class CursesGameRenderer(IGameRenderer):
         dx = getattr(model, "ui_scroll_dx", 0)
         dy = getattr(model, "ui_scroll_dy", 0)
 
-        # Instead of partial scrolling, always do a full redraw if the camera moved.
+        # If camera moved or a full redraw is requested, redraw everything
         if model.full_redraw_needed or dx != 0 or dy != 0:
             self._full_redraw(model)
             model.full_redraw_needed = False
@@ -85,7 +84,7 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.clear()
         self._draw_screen_frame()
 
-        # Show either editor info or player's inventory
+        # Display either editor info or inventory
         if model.context.enable_editor_commands and model.editor_scenery_list:
             sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
             self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
@@ -125,7 +124,7 @@ class CursesGameRenderer(IGameRenderer):
         if not tile_layers:
             return
 
-        # Floor
+        # Render Floor
         floor_obj = tile_layers.get(FLOOR_LAYER)
         floor_color_name = "white_on_black"
         if floor_obj:
@@ -135,17 +134,19 @@ class CursesGameRenderer(IGameRenderer):
             floor_attr = get_color_attr(floor_color_name)
             safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
 
-        # Objects, items, entities
-        obj_list = tile_layers.get(OBJECTS_LAYER, []) + \
-                   tile_layers.get(ITEMS_LAYER, []) + \
-                   tile_layers.get(ENTITIES_LAYER, [])
+        # Render Objects, Items, Entities in that order
+        obj_list = (
+            tile_layers.get(OBJECTS_LAYER, []) +
+            tile_layers.get(ITEMS_LAYER, []) +
+            tile_layers.get(ENTITIES_LAYER, [])
+        )
 
         for obj in obj_list:
             info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
             ch = info.get("ascii_char", obj.char)
             obj_color_name = info.get("color_name", "white_on_black")
 
-            # If it's specifically a TreeTop on the player's tile, handle later
+            # If it's a TreeTop exactly where the player is, we skip until player is drawn.
             if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
                 continue
 
@@ -157,6 +158,7 @@ class CursesGameRenderer(IGameRenderer):
             safe_addch(self.stdscr, sy, sx, ch, attr, clip_borders=True)
 
     def _draw_player_on_top(self, model):
+        # Finally render the player in the correct offset
         px = model.player.x - model.camera_x
         py = model.player.y - model.camera_y + self.map_top_offset
         max_h, max_w = self.stdscr.getmaxyx()
@@ -174,7 +176,7 @@ class CursesGameRenderer(IGameRenderer):
             attr_bold = get_color_attr(player_color, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
 
-            # Overwrite with trunk/top if present
+            # If there's a tree trunk/top in the same tile, it goes on top of the player
             objects_list = tile_layers.get(OBJECTS_LAYER, [])
             trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
             for t_obj in trunk_tops:
