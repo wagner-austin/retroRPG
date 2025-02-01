@@ -17,7 +17,7 @@
 #   - Saving summary data as JSON:
 #      --save-json with no argument => automatically names file in ./summary_print/
 #      --save-json myfile.json => saves with a custom name
-#   - NEW: Saving all matched files’ code to a .txt file (with line breaks) via --save-code
+#   - NEW: Saving all matched files’ code to a .txt file (with line breaks) via --save-code and --savecode 
 
 import os
 import re
@@ -79,7 +79,7 @@ class CustomArgParser(argparse.ArgumentParser):
   \033[1;32m-sj, --save-json\033[0m  [optional filename or no argument]
     Save results to JSON file. No argument => auto-naming.
 
-  \033[1;32m-sc, --save-code\033[0m  [optional filename or no argument]
+  \033[1;32m-sc, --save-code & --savecode\033[0m  [optional filename or no argument]
     Save all matched files' code to a .txt file, with a blank line separating each file.
     No argument => auto-naming.
 
@@ -220,7 +220,7 @@ def main():
     )
     # Save code to a .txt file (auto or custom name)
     parser.add_argument(
-        "-sc", "--save-code",
+        "-sc", "--save-code", "--savecode",
         nargs="?",
         const="AUTO",
         default=None,
