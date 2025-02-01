@@ -1,9 +1,8 @@
 # FileName: controls_main.py
-# version: 2.16
+# version: 2.17
 #
 # Summary: Interprets user input actions for both play and editor modes.
-#          No direct curses usage. We rely on action strings from IGameInput.
-#          Now calls into curses_scene_save for quick save and yes/no prompts (unified).
+#          No direct curses or curses-based code. UI is handled through IGameRenderer.
 #
 # Tags: controls, input, main
 
@@ -16,9 +15,6 @@ from scenery_core import (
 )
 from utils_main import get_front_tile
 
-# Import updated UI helpers from curses_scene_save
-from curses_frontend.curses_scene_save import perform_quick_save, prompt_yes_no_curses
-
 
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
@@ -28,6 +24,9 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
       - MOVE_UP / MOVE_DOWN / MOVE_LEFT / MOVE_RIGHT => movement
       - DEBUG_TOGGLE => toggles debug
       - EDITOR_TOGGLE => toggles editor mode
+
+    This code is now UI-agnostic. We call renderer.quick_save() or renderer.prompt_yes_no(),
+    but do not import curses or curses-specific modules directly.
     """
     player = model.player
     context = model.context
@@ -37,24 +36,15 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
 
     if action == "QUIT":
         # The user pressed 'q' to leave the map.
-        # If we have a filename, do a quick-save immediately.
         if model.loaded_map_filename:
-            perform_quick_save(model, renderer)
+            # If there's a filename, just do a quick-save and quit
+            renderer.quick_save(model)
             should_quit = True
         else:
-            # For a generated map with no filename, prompt to save first:
-            stdscr = None
-            if renderer and hasattr(renderer, "get_curses_window"):
-                stdscr = renderer.get_curses_window()
-
-            if stdscr:
-                save_decision = prompt_yes_no_curses(stdscr, "Save this generated map? (y/n)")
-                if save_decision:
-                    perform_quick_save(model, renderer)
-                should_quit = True
-            else:
-                # No curses window => default to not saving
-                should_quit = True
+            # For a generated map with no filename, ask user if they want to save
+            if renderer.prompt_yes_no("Save this generated map? (y/n)"):
+                renderer.quick_save(model)
+            should_quit = True
 
         return (did_move, should_quit)
 
@@ -120,7 +110,7 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
 
     elif action == "SAVE_QUICK":
         # The user triggered a quick save
-        perform_quick_save(model, renderer)
+        renderer.quick_save(model)
 
     return (did_move, should_quit)
 

@@ -1,23 +1,24 @@
 # FileName: curses_renderer.py
-# version: 3.9 (modified for infinite map)
+# version: 4.0 (modified to implement new prompt_yes_no and quick_save methods)
 #
-# Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region, ignoring world_width/height.
-
+# Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
+#
 # Tags: curses, ui, rendering
 
 import curses
-#import debug
-
+#from engine_interfaces import IGameRenderer
 from engine_interfaces import IGameRenderer
-
-#from .curses_color_init import init_colors
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame
 from .where_curses_themes_lives import CURRENT_THEME
 
+# We import the quick-save and yes/no logic from the curses scene:
+from .curses_scene_save import perform_quick_save, prompt_yes_no_curses
+
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
+
 
 class CursesGameRenderer(IGameRenderer):
     def __init__(self, stdscr):
@@ -28,6 +29,12 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.nodelay(True)
         self.stdscr.keypad(True)
         curses.curs_set(0)
+
+    def get_curses_window(self):
+        """
+        Provide access to the underlying curses window, in case other logic needs it.
+        """
+        return self.stdscr
 
     def get_visible_size(self):
         """
@@ -146,7 +153,7 @@ class CursesGameRenderer(IGameRenderer):
             ch = info.get("ascii_char", obj.char)
             obj_color_name = info.get("color_name", "white_on_black")
 
-            # If it's a TreeTop exactly where the player is, we skip until player is drawn.
+            # If it's a TreeTop exactly where the player is, skip until player is drawn.
             if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
                 continue
 
@@ -175,7 +182,6 @@ class CursesGameRenderer(IGameRenderer):
             player_color = f"white_on_{bg_floor}"
             attr_bold = get_color_attr(player_color, bold=True)
             safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
-            #i don't like that the character is hard coded here. I want the character changeable from one file
 
             # If there's a tree trunk/top in the same tile, it goes on top of the player
             objects_list = tile_layers.get(OBJECTS_LAYER, [])
@@ -198,3 +204,12 @@ class CursesGameRenderer(IGameRenderer):
             color_name = CURRENT_THEME["text_color"]
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
+
+    # -------------------------------------------------------------------------
+    # Implement the new UI-agnostic methods from IGameRenderer:
+    # -------------------------------------------------------------------------
+    def quick_save(self, model):
+        """
+        Perform a quick-save by delegating to the curses_scene_save logic.
+        """
+        perform_quick_save(model, self)
