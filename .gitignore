@@ -4,7 +4,8 @@
 # Tags: gitignore, git
 
 # Added lines to ensure __pycache__ and .pyc files in *all* subdirectories are ignored:
-character/*.json
+    
 **/__pycache__/
 **/*.pyc
 summary_print/all_results_*.txt
+character/*.json
