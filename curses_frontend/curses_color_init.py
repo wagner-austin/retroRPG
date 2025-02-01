@@ -45,7 +45,7 @@ def init_colors():
     # Attempt to define extended colors if supported
     define_extended_colors()
 
-    # Merge base + extended
+    # Merge base + extended colors
     all_colors = dict(BASE_COLORS)
     all_colors.update(EXTENDED_COLORS)
 
@@ -58,23 +58,4 @@ def init_colors():
                 color_pairs[pair_name] = pair_index
                 pair_index += 1
 
-    # Create alias names for legacy references
-    ALIAS_MAP = {
-        "WHITE_TEXT":        "white_on_black",
-        "UI_CYAN":           "cyan_on_black",
-        "UI_MAGENTA":        "magenta_on_black",
-        "UI_WHITE_ON_BLUE":  "white_on_blue",
-        "YELLOW_TEXT":       "yellow_on_black",
-        "ASCII_ART":         "white_on_black",
-        "TREE_TOP":          "green_on_black",
-        "ROCK":              "white_on_black",
-        "RIVER":             "white_on_blue",
-        "GRASS":             "white_on_green",
-        "PATH":              "black_on_yellow",
-    }
-
-    for alias_name, real_name in ALIAS_MAP.items():
-        if real_name in color_pairs:
-            color_pairs[alias_name] = color_pairs[real_name]
-        else:
-            color_pairs[alias_name] = color_pairs.get("white_on_black", 0)
+    # Removed alias mapping in favor of a standardized naming system.

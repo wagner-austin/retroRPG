@@ -83,7 +83,7 @@ def draw_screen_frame(stdscr: curses.window, color_name: str = None) -> None:
     if debug.DEBUG_CONFIG["enabled"]:
         label = "Debug mode: On"
         col = w - len(label) - 6
-        dbg_attr = get_color_attr("WHITE_TEXT")
+        dbg_attr = get_color_attr("white_on_black")
         safe_addstr(stdscr, 0, col, label, dbg_attr, clip_borders=False)
 
 def draw_text(stdscr: curses.window, row: int, col: int, text: str,
