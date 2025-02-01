@@ -3,7 +3,7 @@
 # Summary: Tracks and respawns resources (trees, rocks) after a set countdown.
 # Tags: engine, respawn, resources
 
-from scenery_floor_main import SceneryObject, append_scenery
+from scenery_core import SceneryObject, append_scenery
 
 def handle_respawns(model, mark_dirty_func):
     """

@@ -69,3 +69,14 @@ __all__ = [
     "EMPTY_FLOOR_ID",
     "DEBUG_DOT_ID",
 ]
+
+def get_placeable_scenery_defs():
+    """
+    Return a list of all definition IDs where 'placeable' is True
+    in the ALL_SCENERY_DEFS data.
+    """
+    return [
+        def_id
+        for def_id, info in ALL_SCENERY_DEFS.items()
+        if info.get("placeable", False)
+    ]
