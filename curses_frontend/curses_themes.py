@@ -20,19 +20,19 @@ from .curses_art_skins import (
 
 THEMES = {
     "default": {
-        "border_color":              "white_on_black",
+        "border_color":              "blue_on_black",
         "title_color":               "green_on_black",
-        "instructions_color":        "magenta_on_black",   # replaced alias UI_MAGENTA
+        "instructions_color":        "white_on_black",   
         "text_color":                "white_on_black",
-        "ascii_art_color":           "red_on_black",
+        "ascii_art_color":           "magenta_on_black",
 
-        "highlight_selected_color":  "yellow_on_black",    # replaced alias YELLOW_TEXT
-        "highlight_unselected_color": "white_on_black",     # replaced alias WHITE_TEXT
+        "highlight_selected_color":  "yellow_on_black",   
+        "highlight_unselected_color": "white_on_black", 
 
         # Added keys to handle previously hard-coded colors:
-        "prompt_color":        "cyan_on_black",    # replaced alias UI_CYAN
-        "menu_item_color":     "yellow_on_black",  # replaced alias YELLOW_TEXT
-        "confirmation_color":  "white_on_black",   # replaced alias WHITE_TEXT
+        "prompt_color":        "cyan_on_black",   
+        "menu_item_color":     "yellow_on_black", 
+        "confirmation_color":  "white_on_black",   
 
         "header_art":      HEADER_ART,
         "loading_art":     LOADING_ART,
@@ -45,19 +45,19 @@ THEMES = {
     },
 
     "dark": {
-        "border_color":              "magenta_on_black",  # replaced alias UI_MAGENTA
-        "title_color":               "white_on_blue",     # replaced alias UI_WHITE_ON_BLUE
-        "instructions_color":        "cyan_on_black",     # replaced alias UI_CYAN
-        "text_color":                "yellow_on_black",   # replaced alias YELLOW_TEXT
-        "ascii_art_color":           "white_on_black",    # replaced alias ASCII_ART
+        "border_color":              "magenta_on_black", 
+        "title_color":               "white_on_blue",    
+        "instructions_color":        "cyan_on_black",
+        "text_color":"yellow_on_black",   
+        "ascii_art_color":           "white_on_black",
 
-        "highlight_selected_color":  "yellow_on_black",   # replaced alias YELLOW_TEXT
-        "highlight_unselected_color": "white_on_black",    # replaced alias WHITE_TEXT
+        "highlight_selected_color":  "yellow_on_black",
+        "highlight_unselected_color": "white_on_black", 
 
         # Same added keys for a consistent dictionary:
-        "prompt_color":        "magenta_on_black",  # replaced alias UI_MAGENTA
-        "menu_item_color":     "yellow_on_black",   # replaced alias YELLOW_TEXT
-        "confirmation_color":  "white_on_black",    # replaced alias WHITE_TEXT
+        "prompt_color":        "magenta_on_black",
+        "menu_item_color":     "yellow_on_black",
+        "confirmation_color":  "white_on_black",  
 
         "header_art":      HEADER_ART,
         "loading_art":     LOADING_ART,
