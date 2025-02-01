@@ -10,8 +10,7 @@ import curses
 import debug
 
 from procedural_map_generator.generator import generate_procedural_map
-from .curses_common import draw_screen_frame, draw_title, draw_instructions
-from .curses_animations import _draw_art
+from .curses_common import draw_screen_frame, draw_title, draw_instructions, _draw_art
 from .where_curses_themes_lives import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_highlight import draw_global_selector_line

@@ -1,0 +1,1688 @@
+
+# FileName: __init__.py
+#
+# version: 1.0
+#
+# Summary: Marks this directory as a Python package for curses-based front-end.
+#
+# Tags: package, curses
+
+"""
+Package for all curses-based front-end modules:
+ - curses_input
+ - curses_renderer
+ - curses_menus
+ - curses_map_ui
+ - curses_common (shared drawing helpers)
+ - curses_animations
+ - curses_highlight
+ - curses_art_skins
+ - curses_utils
+ - curses_color_init
+"""
+
+
+# FileName: curses_animations.py
+#
+# version: 2.2
+#
+# Summary: Houses drawing routines for sprite/scene animations (ASCII art, borders), with no permanent loops or direct user input logic.
+#
+# Tags: animation, drawing, curses
+
+import curses
+import debug
+from .curses_utils import safe_addstr, safe_addch, get_color_attr
+from .curses_common import draw_screen_frame
+from .where_curses_themes_lives import CURRENT_THEME  # Newly added for default color usage
+
+
+def draw_subtle_art_frame(stdscr, art_lines, offset_x, start_row=3, start_col=2, color_name=None):
+    """
+    Draw one 'frame' of the ASCII art shifted horizontally by offset_x.
+    If color_name is None, we use CURRENT_THEME's 'ascii_art_color'.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["ascii_art_color"]
+    _draw_art(stdscr, art_lines, start_row=start_row, start_col=start_col + offset_x, color_name=color_name)
+
+def _draw_art(stdscr, art_lines, start_row=1, start_col=2, color_name=None):
+    """
+    Renders 'art_lines' at (start_row, start_col), using a specified color_name.
+    If color_name is None, we use CURRENT_THEME's 'ascii_art_color'.
+    Safe for static or single-frame usage.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["ascii_art_color"]
+
+    attr = get_color_attr(color_name)
+    max_h, max_w = stdscr.getmaxyx()
+    row = start_row
+    for line in art_lines:
+        if row >= max_h - 1:
+            break
+        safe_addstr(stdscr, row, start_col, line, attr, clip_borders=True)
+        row += 1
+
+
+# FileName: curses_color_init.py
+#
+# version: 3.3
+#
+# Summary: Initializes curses color pairs. Skips invalid indexes if terminal supports fewer colors.
+#
+# Tags: colors, curses, setup
+
+import curses
+
+# The standard 8 curses colors mapped to friendly names:
+BASE_COLORS = {
+    "black":   curses.COLOR_BLACK,
+    "red":     curses.COLOR_RED,
+    "green":   curses.COLOR_GREEN,
+    "yellow":  curses.COLOR_YELLOW,
+    "blue":    curses.COLOR_BLUE,
+    "magenta": curses.COLOR_MAGENTA,
+    "cyan":    curses.COLOR_CYAN,
+    "white":   curses.COLOR_WHITE,
+}
+
+# Extended color indexes for e.g. light_gray, dark_gray, etc.
+EXTENDED_COLORS = {
+    "light_gray": 8,
+    "dark_gray":  9,
+    # Could add more if terminal supports it.
+}
+
+def define_extended_colors():
+    """Attempt to initialize extra colors if the terminal supports color redefinition."""
+    if not curses.can_change_color():
+        return
+    # light_gray => ~70% white
+    curses.init_color(8, 700, 700, 700)
+    # dark_gray  => ~30% white
+    curses.init_color(9, 300, 300, 300)
+
+color_pairs = {}
+
+def init_colors():
+    curses.start_color()
+    curses.use_default_colors()
+
+    # Attempt to define extended colors if supported
+    define_extended_colors()
+
+    # Merge base + extended colors
+    all_colors = dict(BASE_COLORS)
+    all_colors.update(EXTENDED_COLORS)
+
+    pair_index = 1
+    for fg_name, fg_val in all_colors.items():
+        for bg_name, bg_val in all_colors.items():
+            if fg_val < curses.COLORS and bg_val < curses.COLORS:
+                pair_name = f"{fg_name}_on_{bg_name}"
+                curses.init_pair(pair_index, fg_val, bg_val)
+                color_pairs[pair_name] = pair_index
+                pair_index += 1
+
+    # Removed alias mapping in favor of a standardized naming system.
+
+
+# FileName: curses_common.py
+#
+# version: 2.9
+#
+# Summary: Provides functions and helpers for drawing frames, labels, etc. in curses.
+#
+# Tags: ui, rendering, curses
+
+import curses
+import debug
+from .curses_color_init import color_pairs
+from .curses_utils import safe_addstr, safe_addch, get_color_attr
+
+def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = None) -> None:
+    """
+    Draw a title string at the given row. If color_name is not provided,
+    use CURRENT_THEME's 'title_color'.
+    """
+    from .where_curses_themes_lives import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["title_color"]
+
+    max_h, max_w = stdscr.getmaxyx()
+    if row < 0 or row >= max_h:
+        return
+    col = 2
+    attr = get_color_attr(color_name, bold=True)
+    safe_addstr(stdscr, row, col, text, attr, clip_borders=True)
+
+def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int = 2, color_name: str = None) -> None:
+    """
+    Draws a list of instruction lines near the bottom of the screen. 
+    If color_name not provided, use CURRENT_THEME's 'instructions_color'.
+    """
+    from .where_curses_themes_lives import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["instructions_color"]
+
+    h, w = stdscr.getmaxyx()
+    attr = get_color_attr(color_name)
+
+    start_row = h - from_bottom - len(lines)
+    if start_row < 1:
+        start_row = 1
+
+    row = start_row
+    for line in lines:
+        if row >= h - 1:
+            break
+        safe_addstr(stdscr, row, 2, line, attr, clip_borders=True)
+        row += 1
+
+def draw_screen_frame(stdscr: curses.window, color_name: str = None) -> None:
+    """
+    Draws a rectangular border around the entire screen, plus a "Debug mode" label if debug is enabled.
+    If color_name not provided, use CURRENT_THEME's 'border_color'.
+    """
+    from .where_curses_themes_lives import CURRENT_THEME
+    if color_name is None:
+        color_name = CURRENT_THEME["border_color"]
+
+    h, w = stdscr.getmaxyx()
+    border_attr = get_color_attr(color_name)
+
+    # Top line
+    for x in range(w):
+        safe_addch(stdscr, 0, x, curses.ACS_HLINE, border_attr, clip_borders=False)
+    safe_addch(stdscr, 0, 0, curses.ACS_ULCORNER, border_attr, clip_borders=False)
+    safe_addch(stdscr, 0, w - 1, curses.ACS_URCORNER, border_attr, clip_borders=False)
+
+    # Bottom line
+    for x in range(w):
+        safe_addch(stdscr, h - 1, x, curses.ACS_HLINE, border_attr, clip_borders=False)
+    safe_addch(stdscr, h - 1, 0, curses.ACS_LLCORNER, border_attr, clip_borders=False)
+    safe_addch(stdscr, h - 1, w - 1, curses.ACS_LRCORNER, border_attr, clip_borders=False)
+
+    # Left/right
+    for y in range(1, h - 1):
+        safe_addch(stdscr, y, 0, curses.ACS_VLINE, border_attr, clip_borders=False)
+        safe_addch(stdscr, y, w - 1, curses.ACS_VLINE, border_attr, clip_borders=False)
+
+    # Debug label
+    if debug.DEBUG_CONFIG["enabled"]:
+        label = "Debug mode: On"
+        col = w - len(label) - 6
+        dbg_attr = get_color_attr("white_on_black")
+        safe_addstr(stdscr, 0, col, label, dbg_attr, clip_borders=False)
+
+def draw_text(stdscr: curses.window, row: int, col: int, text: str,
+              fg: str = "white", bg: str = "black",
+              bold: bool = False, underline: bool = False) -> None:
+    """
+    Draw text at (row, col) with direct FG_on_BG approach.
+    """
+    from .curses_utils import parse_two_color_names
+    pair_name = f"{fg}_on_{bg}"
+    attr = get_color_attr(pair_name, bold=bold, underline=underline)
+    safe_addstr(stdscr, row, col, text, attr, clip_borders=True)
+
+
+# FileName: curses_highlight.py
+#
+# version: 1.4
+#
+# Summary: Provides a single, globally configurable highlight/selector system.
+#
+# Tags: selector, highlight, effects
+
+import curses
+from .curses_color_init import color_pairs
+from .curses_utils import safe_addstr, get_color_attr
+from .where_curses_themes_lives import CURRENT_THEME
+
+GLOBAL_HIGHLIGHT_CONFIG = {
+    # We set them to None; we will fetch from CURRENT_THEME at runtime.
+    "selected_color_name":   None,
+    "unselected_color_name": None,
+    "effect_name":           "REVERSE_BLINK",
+    "speed_factor":          5,
+}
+
+def get_global_selector_config():
+    """
+    Returns the global highlight config, filling in selected/unselected
+    color names from the CURRENT_THEME if they are None.
+    """
+    config = GLOBAL_HIGHLIGHT_CONFIG.copy()
+    if config["selected_color_name"] is None:
+        config["selected_color_name"] = CURRENT_THEME["highlight_selected_color"]
+    if config["unselected_color_name"] is None:
+        config["unselected_color_name"] = CURRENT_THEME["highlight_unselected_color"]
+    return config
+
+def get_selector_effect_attrs(effect="REVERSE_BLINK", frame=0, speed_factor=10) -> int:
+    toggle_state = (frame // speed_factor) % 2
+    if effect == "NONE":
+        return curses.A_NORMAL
+    elif effect == "REVERSE":
+        return curses.A_REVERSE
+    elif effect == "BLINK":
+        return curses.A_BLINK
+    elif effect == "REVERSE_BLINK":
+        return (curses.A_REVERSE | curses.A_BLINK)
+    elif effect == "FLASH":
+        return curses.A_REVERSE if toggle_state == 0 else curses.A_NORMAL
+    elif effect == "GLOW":
+        return curses.A_BOLD if toggle_state == 0 else curses.A_NORMAL
+    elif effect == "SHIMMER":
+        return (curses.A_BOLD | curses.A_BLINK) if toggle_state == 0 else curses.A_NORMAL
+    return curses.A_REVERSE  # fallback
+
+def draw_global_selector_line(stdscr, row: int, text: str, is_selected: bool=False, frame: int=0) -> None:
+    config = get_global_selector_config()
+    selected_color_name   = config["selected_color_name"]
+    unselected_color_name = config["unselected_color_name"]
+    effect_name           = config["effect_name"]
+    speed_factor          = config["speed_factor"]
+
+    if is_selected:
+        attrs = get_selector_effect_attrs(effect=effect_name, frame=frame, speed_factor=speed_factor)
+        color_attr = get_color_attr(selected_color_name) | attrs
+    else:
+        color_attr = get_color_attr(unselected_color_name)
+
+    safe_addstr(stdscr, row, 2, text, color_attr)
+
+
+# FileName: curses_renderer.py
+# version: 3.9 (modified for infinite map)
+#
+# Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region, ignoring world_width/height.
+
+# Tags: curses, ui, rendering
+
+import curses
+#import debug
+
+from engine_interfaces import IGameRenderer
+
+#from .curses_color_init import init_colors
+from .curses_highlight import get_color_attr
+from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
+from .curses_common import draw_screen_frame
+from .where_curses_themes_lives import CURRENT_THEME
+
+from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
+from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
+
+class CursesGameRenderer(IGameRenderer):
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.map_top_offset = 3
+        self.map_side_offset = 0
+
+        self.stdscr.nodelay(True)
+        self.stdscr.keypad(True)
+        curses.curs_set(0)
+
+    def get_visible_size(self):
+        """
+        Overridden to return the actual curses screen size minus any offsets.
+        """
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        visible_rows = max_h - self.map_top_offset
+        if visible_rows < 0:
+            visible_rows = 0
+
+        visible_cols = max_w - self.map_side_offset
+        return (visible_cols, visible_rows)
+
+    def render_scene(self, model, scene_layers):
+        self.stdscr.erase()
+
+        # Draw each layer in ascending z order
+        sorted_layers = sorted(scene_layers, key=lambda l: l["z"])
+        for layer in sorted_layers:
+            if layer.get("visible", True):
+                layer_name = layer.get("name", "")
+                self._render_layer(layer_name, model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _render_layer(self, layer_name, model):
+        if layer_name == "background":
+            border_col = CURRENT_THEME["border_color"]
+            draw_screen_frame(self.stdscr, border_col)
+        elif layer_name == "game_world":
+            if model:
+                self._full_redraw(model)
+
+    def render(self, model):
+        dx = getattr(model, "ui_scroll_dx", 0)
+        dy = getattr(model, "ui_scroll_dy", 0)
+
+        # If camera moved or a full redraw is requested, redraw everything
+        if model.full_redraw_needed or dx != 0 or dy != 0:
+            self._full_redraw(model)
+            model.full_redraw_needed = False
+        else:
+            self._update_dirty_tiles(model)
+
+        model.ui_scroll_dx = 0
+        model.ui_scroll_dy = 0
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _full_redraw(self, model):
+        self.stdscr.clear()
+        self._draw_screen_frame()
+
+        # Display either editor info or inventory
+        if model.context.enable_editor_commands and model.editor_scenery_list:
+            sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
+            self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
+        else:
+            inv_text = (
+                f"Inventory: Gold={model.player.gold}, "
+                f"Wood={model.player.wood}, Stone={model.player.stone}"
+            )
+            self._draw_text(1, 2, inv_text)
+
+        max_h, max_w = self.stdscr.getmaxyx()
+        visible_cols = max_w
+        visible_rows = max_h - self.map_top_offset
+
+        for wx in range(model.camera_x, model.camera_x + visible_cols):
+            for wy in range(model.camera_y, model.camera_y + visible_rows):
+                model.dirty_tiles.add((wx, wy))
+
+        self._update_dirty_tiles(model)
+
+    def _update_dirty_tiles(self, model):
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        for (wx, wy) in model.dirty_tiles:
+            sx = wx - model.camera_x
+            sy = wy - model.camera_y + self.map_top_offset
+            if 0 <= sx < max_w and 0 <= sy < max_h:
+                self._draw_single_tile(wx, wy, sx, sy, model)
+
+        self._draw_player_on_top(model)
+
+    def _draw_single_tile(self, wx, wy, sx, sy, model):
+        blank_attr = get_color_attr("white_on_black")
+        safe_addch(self.stdscr, sy, sx, " ", blank_attr, clip_borders=True)
+
+        tile_layers = model.placed_scenery.get((wx, wy), None)
+        if not tile_layers:
+            return
+
+        # Render Floor
+        floor_obj = tile_layers.get(FLOOR_LAYER)
+        floor_color_name = "white_on_black"
+        if floor_obj:
+            info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+            ch = info.get("ascii_char", floor_obj.char)
+            floor_color_name = info.get("color_name", "white_on_black")
+            floor_attr = get_color_attr(floor_color_name)
+            safe_addch(self.stdscr, sy, sx, ch, floor_attr, clip_borders=True)
+
+        # Render Objects, Items, Entities in that order
+        obj_list = (
+            tile_layers.get(OBJECTS_LAYER, []) +
+            tile_layers.get(ITEMS_LAYER, []) +
+            tile_layers.get(ENTITIES_LAYER, [])
+        )
+
+        for obj in obj_list:
+            info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
+            ch = info.get("ascii_char", obj.char)
+            obj_color_name = info.get("color_name", "white_on_black")
+
+            # If it's a TreeTop exactly where the player is, we skip until player is drawn.
+            if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
+                continue
+
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            fg_obj, _ = parse_two_color_names(obj_color_name)
+            final_color = f"{fg_obj}_on_{bg_floor}"
+            attr = get_color_attr(final_color)
+
+            safe_addch(self.stdscr, sy, sx, ch, attr, clip_borders=True)
+
+    def _draw_player_on_top(self, model):
+        # Finally render the player in the correct offset
+        px = model.player.x - model.camera_x
+        py = model.player.y - model.camera_y + self.map_top_offset
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        if 0 <= px < max_w and 0 <= py < max_h:
+            tile_layers = model.placed_scenery.get((model.player.x, model.player.y), {})
+            floor_obj = tile_layers.get(FLOOR_LAYER)
+            floor_color_name = "white_on_black"
+            if floor_obj:
+                finfo = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+                floor_color_name = finfo.get("color_name", "white_on_black")
+
+            fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+            player_color = f"white_on_{bg_floor}"
+            attr_bold = get_color_attr(player_color, bold=True)
+            safe_addch(self.stdscr, py, px, "@", attr_bold, clip_borders=True)
+            #i don't like that the character is hard coded here. I want the character changeable from one file
+
+            # If there's a tree trunk/top in the same tile, it goes on top of the player
+            objects_list = tile_layers.get(OBJECTS_LAYER, [])
+            trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
+            for t_obj in trunk_tops:
+                info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
+                ch = info.get("ascii_char", t_obj.char)
+                top_color = info.get("color_name", "white_on_black")
+
+                fg_obj, _ = parse_two_color_names(top_color)
+                final_color = f"{fg_obj}_on_{bg_floor}"
+                trunk_attr = get_color_attr(final_color)
+                safe_addch(self.stdscr, py, px, ch, trunk_attr, clip_borders=True)
+
+    def _draw_screen_frame(self):
+        draw_screen_frame(self.stdscr)
+
+    def _draw_text(self, row, col, text, color_name=None, bold=False, underline=False):
+        if color_name is None:
+            color_name = CURRENT_THEME["text_color"]
+        attr = get_color_attr(color_name, bold=bold, underline=underline)
+        safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
+
+
+# FileName: curses_scene_game.py
+# version: 1.1 (removed duplicate curses setup, let renderer handle it)
+
+"""
+Summary: This scene sets up the curses-based input & renderer and calls
+         run_game_loop from engine_main.
+"""
+
+from .where_curses_input_lives import CursesGameInput
+from .curses_renderer import CursesGameRenderer
+from engine_main import run_game_loop
+
+def game_scene_ui(stdscr, model, context):
+    """
+    Sets up the curses-based input & rendering, then runs the main game loop
+    with the given model & context. Returns when the loop ends.
+    """
+
+    # We only set up our input here. The renderer's curses init is done in CursesGameRenderer.
+    game_input = CursesGameInput(stdscr)
+    game_renderer = CursesGameRenderer(stdscr)
+
+    # Enter the main logic loop (in engine_main).
+    run_game_loop(model, context, game_input, game_renderer)
+
+
+# FileName: curses_scene_home.py
+#
+# version: 1.1
+#
+# Summary: Defines the 'scene_home_screen' function for the main / title screen.
+#          Now with no animation loop; we simply draw a static banner (if desired).
+#
+# Tags: scene, home, menu
+
+import curses
+import debug
+
+from .curses_common import draw_screen_frame, draw_title
+from .curses_animations import _draw_art
+from .curses_highlight import draw_global_selector_line
+from .where_curses_themes_lives import CURRENT_THEME
+
+
+def home_scene_ui(stdscr):
+    """
+    The main 'home screen' with a static ASCII banner (optional)
+    and a simple menu for Play/Quit/Settings. Returns:
+      1 => Play
+      2 => Quit
+      3 => Settings
+    """
+    stdscr.nodelay(True)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    # Grab the ASCII art for the main menu from the current theme
+    main_menu_lines = CURRENT_THEME["main_menu_art"]
+
+    menu_lines = [
+        "~~~~~~~~~",
+        "1) Play",
+        "2) Quit",
+        "3) Settings",
+        "~~~~~~~~~"
+    ]
+    # We'll consider lines #1 => "1) Play", #2 => "2) Quit", #3 => "3) Settings"
+    selectable_indices = [1, 2, 3]
+
+    current_select_slot = 0
+    frame_count = 0
+
+    while True:
+        stdscr.erase()
+        draw_screen_frame(stdscr)
+        draw_title(stdscr, "Welcome to Retro RPG!", row=1)
+
+        # If you want to show a *static* ASCII banner, do it here:
+        _draw_art(stdscr, main_menu_lines, start_row=3, start_col=2)
+
+        # Draw menu near the bottom
+        h, w = stdscr.getmaxyx()
+        from_bottom = 2
+        start_row = h - from_bottom - len(menu_lines)
+        if start_row < 1:
+            start_row = 1
+
+        row = start_row
+        for i, line_text in enumerate(menu_lines):
+            is_selected = False
+            if i in selectable_indices:
+                sel_index = selectable_indices.index(i)
+                if sel_index == current_select_slot:
+                    is_selected = True
+            draw_global_selector_line(
+                stdscr,
+                row,
+                line_text,
+                is_selected=is_selected,
+                frame=frame_count
+            )
+            row += 1
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+        key = stdscr.getch()
+        if key != -1:
+            # Simple up/down to cycle among 3 menu items
+            if key in (curses.KEY_UP, ord('w'), ord('W')):
+                current_select_slot = max(0, current_select_slot - 1)
+            elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
+                if current_select_slot < len(selectable_indices) - 1:
+                    current_select_slot += 1
+            elif key in (curses.KEY_ENTER, 10, 13):
+                # user pressed Enter on the current slot
+                if current_select_slot == 0:
+                    return 1  # Play
+                elif current_select_slot == 1:
+                    return 2  # Quit
+                else:
+                    return 3  # Settings
+            elif key == ord('1'):
+                return 1  # Play
+            elif key == ord('2'):
+                return 2  # Quit
+            elif key == ord('3'):
+                return 3  # Settings
+            elif key in (ord('q'), ord('Q'), 27):
+                return 2  # user pressed Esc => Quit
+            elif key == ord('v'):
+                debug.toggle_debug()
+
+        frame_count += 1
+
+
+# FileName: curses_scene_load.py
+# version: 1.5
+#
+# Summary: Contains the user flow for loading or generating a map.
+#          Now "q" or ESC will exit the load scene (instead of 'y').
+#
+# Tags: map, load, scene
+
+import curses
+import debug
+
+from procedural_map_generator.generator import generate_procedural_map
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
+from .where_curses_themes_lives import CURRENT_THEME
+from .curses_utils import safe_addstr, get_color_attr
+from .curses_highlight import draw_global_selector_line
+
+from map_list_logic import get_map_list, delete_map_file
+
+
+def load_scene_ui(stdscr):
+    """
+    The user flow for loading a map or generating a new one.
+    Returns either:
+      - "" if canceled,
+      - a dict if user picks "Generate a new map",
+      - or just the filename string if user loads an existing map.
+    """
+    while True:
+        selection = select_map_file_load_mode(stdscr)
+        if not selection:
+            # user canceled => back to main menu
+            return ""
+
+        if selection == "GENERATE":
+            # user wants to generate a new map
+            data = generate_procedural_map()
+            return data
+
+        elif isinstance(selection, dict):
+            return selection
+
+        else:
+            # user picked an existing file by name
+            return selection
+
+
+def select_map_file_load_mode(stdscr):
+    """
+    Displays a list of .json map files in 'maps' directory for load usage.
+    Returns "GENERATE", a filename string, "", or a tuple like ("EDIT", filename)
+    """
+    files = get_map_list(maps_dir="maps", extension=".json")
+    return _select_map_file_load_mode(stdscr, files)
+
+
+def _select_map_file_load_mode(stdscr, files):
+    # Insert "Generate a new map>" at index 0
+    files.insert(0, "Generate a new map>")
+
+    selected_index = 0
+    frame_count = 0
+
+    while True:
+        _draw_load_map_screen(stdscr)
+        max_h, max_w = stdscr.getmaxyx()
+        row = 10
+
+        # Display the list of maps
+        for i, fname in enumerate(files):
+            if row >= max_h - 2:
+                break
+
+            if i == 0:
+                display_text = "Generate a new map"
+            else:
+                display_text = f"{i}) {fname}"
+
+            is_sel = (i == selected_index)
+            draw_global_selector_line(
+                stdscr,
+                row,
+                f"> {display_text}" if is_sel else f"  {display_text}",
+                is_selected=is_sel,
+                frame=frame_count
+            )
+            row += 1
+
+        stdscr.refresh()
+        key = stdscr.getch()
+
+        if key in (curses.KEY_UP, ord('w'), ord('W')):
+            selected_index = max(0, selected_index - 1)
+        elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
+            selected_index = min(len(files) - 1, selected_index + 1)
+        elif key in (curses.KEY_ENTER, 10, 13):
+            # Enter = pick
+            if selected_index == 0:
+                return "GENERATE"
+            else:
+                return files[selected_index]
+        elif key in (ord('q'), ord('Q'), 27):
+            # 'q' or ESC => cancel load
+            return ""
+        elif key == ord('v'):
+            debug.toggle_debug()
+        elif key == ord('d'):
+            # Deleting a file only if selected_index > 0
+            if selected_index > 0:
+                to_delete = files[selected_index]
+                confirm = prompt_delete_confirmation(stdscr, to_delete)
+                if confirm:
+                    success = delete_map_file(to_delete, maps_dir="maps")
+                    if success:
+                        del files[selected_index]
+                        if selected_index >= len(files):
+                            selected_index = len(files) - 1
+
+        elif ord('0') <= key <= ord('9'):
+            # Quick numeric selection
+            typed = key - ord('0')
+            if 0 <= typed < len(files):
+                selected_index = typed
+
+        if len(files) == 1:
+            # Only "Generate a new map" remains
+            selected_index = 0
+
+        frame_count += 1
+
+
+def prompt_delete_confirmation(stdscr, filename):
+    """
+    Prompt the user: 'Delete X? (y/n)'. Return True if 'y', else False.
+    """
+
+    max_h, max_w = stdscr.getmaxyx()
+    question = f"Delete '{filename}'? (y/n)"  # We can keep 'y' for delete confirmation, or change to 'q'.
+    attr = get_color_attr(CURRENT_THEME["confirmation_color"])
+
+    row = max_h - 2
+    blank_line = " " * (max_w - 4)
+    safe_addstr(stdscr, row, 2, blank_line, attr, clip_borders=False)
+    safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
+    stdscr.refresh()
+
+    stdscr.nodelay(False)
+    curses.curs_set(1)
+    curses.echo()
+
+    while True:
+        c = stdscr.getch()
+        if c in (ord('y'), ord('Y')):
+            _restore_input_mode(stdscr)
+            return True
+        elif c in (ord('n'), ord('N'), ord('q'), 27):
+            _restore_input_mode(stdscr)
+            return False
+
+
+def _draw_load_map_screen(stdscr):
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Load Map", row=1)
+
+    # Now we use the theme's crocodile art
+    crocodile_lines = CURRENT_THEME["crocodile_art"]
+    _draw_art(stdscr, crocodile_lines, start_row=3, start_col=2)
+
+    # Let instructions default to CURRENT_THEME["instructions_color"]
+    instructions = [
+        "↑/↓ = select, ENTER=load, 'd'=del, 'q'=back, 'v'=dbg, 'e'=editor"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3)
+
+
+def _restore_input_mode(stdscr):
+    curses.noecho()
+    curses.curs_set(0)
+    curses.napms(50)
+    curses.flushinp()
+    stdscr.nodelay(True)
+
+
+# FileName: curses_scene_manager.py
+# version: 3.7
+#
+# Summary: High-level MenuFlowManager for main menu screens (HOME, SETTINGS, GAME).
+#          Defers map-saving logic to curses_scene_save.
+#
+# Tags: scene, menu, manager
+
+import os
+import json
+import curses  # needed for user input
+
+from .curses_scene_home import home_scene_ui
+from .curses_scene_settings import settings_scene_ui
+from .curses_scene_load import load_scene_ui
+from .curses_scene_game import game_scene_ui
+from .curses_color_init import init_colors
+#from .curses_controls_ui import prompt_yes_no
+
+# We now import the dedicated save logic from curses_scene_save
+from .curses_scene_save import handle_post_game_scene_save
+
+from player_char_io import save_player
+from play_runner import build_model_for_play
+
+
+class MenuFlowManager:
+    """
+    Manages the main menu screens (HOME, SETTINGS, GAME).
+    After the user leaves the game scene, we ensure that:
+     - The player's data is always saved to player.json.
+     - If it’s a new or existing map, we handle saving via the dedicated
+       handle_post_game_scene_save() from curses_scene_save.
+    """
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        init_colors()
+
+        self.current_state = "HOME"
+        self.running = True
+
+    def run(self):
+        while self.running:
+            if self.current_state == "HOME":
+                choice = home_scene_ui(self.stdscr)
+                if choice == 1:  # Play
+                    self.current_state = "PLAY"
+                elif choice == 2:  # Quit
+                    self.current_state = "QUIT"
+                else:
+                    self.current_state = "SETTINGS"
+
+            elif self.current_state == "PLAY":
+                while True:
+                    selection = load_scene_ui(self.stdscr)
+                    if not selection:
+                        self.current_state = "HOME"
+                        break
+
+                    # 1) "GENERATE" => brand-new map
+                    if selection == "GENERATE":
+                        model, context = build_model_for_play({}, is_generated=True)
+                        if not model:
+                            self.current_state = "HOME"
+                            break
+
+                        game_scene_ui(self.stdscr, model, context)
+                        save_player(model.player)
+                        handle_post_game_scene_save(self.stdscr, model)
+                        continue
+
+                    # 2) A dictionary => newly generated procedural data
+                    if isinstance(selection, dict):
+                        model, context = build_model_for_play(selection, is_generated=True)
+                        if not model:
+                            self.current_state = "HOME"
+                            break
+
+                        game_scene_ui(self.stdscr, model, context)
+                        save_player(model.player)
+                        handle_post_game_scene_save(self.stdscr, model)
+                        continue
+
+                    # 3) A string => existing map filename
+                    if isinstance(selection, str):
+                        filename = selection
+                        model, context = build_model_for_play(filename, is_generated=False)
+                        if not model:
+                            self.current_state = "HOME"
+                            break
+
+                        game_scene_ui(self.stdscr, model, context)
+                        save_player(model.player)
+                        handle_post_game_scene_save(self.stdscr, model)
+
+            elif self.current_state == "SETTINGS":
+                settings_scene_ui(self.stdscr)
+                self.current_state = "HOME"
+
+            elif self.current_state == "QUIT":
+                self.running = False
+
+
+# FileName: curses_scene_save.py
+# version: 1.7
+#
+# Summary:
+#   - Contains all save-scene UI flows for picking/creating filenames,
+#     prompting for overwrites, and calling the logic to store map data.
+#   - Includes handle_post_game_scene_save() to unify new/existing map saves
+#     after gameplay.
+#   - Merged in the quick-save code (previously curses_y_or_no_quicksave.py)
+#     so we have 1 fewer files overall.
+#
+# Tags: map, save, scene
+
+import curses
+import debug
+
+from map_list_logic import get_map_list
+
+# Curses/UI utilities
+from .curses_utils import safe_addstr, get_color_attr
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+from .curses_animations import _draw_art
+from .where_curses_themes_lives import CURRENT_THEME
+
+# Logic is in a dedicated file:
+
+from scene_save_logic import (
+    save_player_data,
+    does_file_exist_in_maps_dir,
+    build_and_save_map,
+    update_player_coords_in_map
+)
+
+
+def handle_post_game_scene_save(stdscr, model):
+    """
+    Called after the player returns from the game scene.
+    Decides whether it’s a new map or existing map, then prompts user
+    to save the newly placed or edited scenery.
+
+    Logic summary:
+      - If model.loaded_map_filename is None => ask user: "Save new map? (y/n)"
+        -> if yes => call save_map_ui(...) for a new file
+      - If model.loaded_map_filename is set => update player's x,y in JSON,
+        then ask "Save changes to existing map? (y/n)" => if yes => overwrite
+    """
+
+    # Always ensure we have the player's updated data
+    save_player_data(model.player)
+
+    # brand-new map => ask user to save under new file name
+    if model.loaded_map_filename is None:
+        wants_save = _prompt_save_new_map(stdscr)
+        if wants_save:
+            placed_scenery = getattr(model, 'placed_scenery', {})
+            w = getattr(model, 'world_width', 100)
+            h = getattr(model, 'world_height', 100)
+
+            save_map_ui(
+                stdscr,
+                placed_scenery=placed_scenery,
+                player=model.player,
+                world_width=w,
+                world_height=h,
+                filename_override=None,
+                notify_overwrite=False
+            )
+    else:
+        # Existing map => update player's coords, then prompt to confirm saving changes
+        update_player_coords_in_map(model.loaded_map_filename, model.player.x, model.player.y)
+
+        placed_scenery = getattr(model, 'placed_scenery', {})
+        w = getattr(model, 'world_width', 100)
+        h = getattr(model, 'world_height', 100)
+
+        # preliminary save before user confirmation
+        save_map_ui(
+            stdscr,
+            placed_scenery=placed_scenery,
+            player=model.player,
+            world_width=w,
+            world_height=h,
+            filename_override=model.loaded_map_filename,
+            notify_overwrite=False
+        )
+
+
+def save_map_ui(stdscr,
+                placed_scenery,
+                player=None,
+                world_width=100,
+                world_height=100,
+                filename_override=None,
+                notify_overwrite=False):
+    """
+    The user flow for saving a map. Potentially prompts for a filename or overwriting.
+    If filename_override is given, skip the selection and use that name directly.
+    Otherwise:
+      1) Show a "save" list of existing files (via select_map_file(..., mode='save')).
+      2) User can pick a file to overwrite or type 'n' for new => new filename prompt.
+      3) If user cancels at any point, we just return.
+    """
+    if filename_override:
+        # If we have a forced filename, skip the UI and use that
+        filename = filename_override
+    else:
+        overwrite_or_new = select_map_file(stdscr, mode='save')
+        if not overwrite_or_new:
+            # user canceled => return
+            return
+
+        if overwrite_or_new == "NEW_FILE":
+            filename = prompt_for_filename(stdscr, "Enter filename to save as: ")
+            if not filename:
+                return
+            if not filename.endswith(".json"):
+                filename += ".json"
+        else:
+            filename = overwrite_or_new
+
+    # Check if the file already existed (so we can notify about overwriting)
+    file_existed = does_file_exist_in_maps_dir(filename)
+
+    # Build the map data and save it (from scene_save_logic)
+    build_and_save_map(filename, placed_scenery, player, world_width, world_height)
+
+    # If we overwrote an existing file and want a brief pause:
+    if file_existed and notify_overwrite:
+        curses.napms(0)  # you can adjust the duration if desired
+
+
+def select_map_file(stdscr, mode='save'):
+    """
+    Bridging function to display a file list for 'save' usage.
+
+    - If mode != 'save', raises ValueError.
+    - Fetches existing .json files from 'maps' dir,
+      then calls select_map_file_save_mode(...).
+    - Returns either the chosen filename, "NEW_FILE", or "" if canceled.
+    """
+    if mode != 'save':
+        raise ValueError("select_map_file(...) now only supports 'save' mode.")
+
+    files = get_map_list(maps_dir="maps", extension=".json")
+    return select_map_file_save_mode(stdscr, files)
+
+
+def select_map_file_save_mode(stdscr, files):
+    """
+    Displays a list of .json map files for 'save' usage.
+
+    Returns one of:
+      - "NEW_FILE": user wants to create a new filename
+      - a filename string (chosen from the list)
+      - "" if canceled
+    """
+    while True:
+        _draw_save_map_screen(stdscr)
+        max_h, max_w = stdscr.getmaxyx()
+        row = 10
+
+        attr_prompt = get_color_attr(CURRENT_THEME["prompt_color"])
+        attr_menu_item = get_color_attr(CURRENT_THEME["menu_item_color"])
+
+        if files:
+            safe_addstr(
+                stdscr, row, 2,
+                "Maps (pick number to overwrite) or 'n' for new, or Enter to cancel:",
+                attr_prompt, clip_borders=True
+            )
+            row += 1
+
+            for i, filename in enumerate(files, start=1):
+                if row >= max_h - 1:
+                    break
+                safe_addstr(stdscr, row, 2, f"{i}. {filename}", attr_menu_item, clip_borders=True)
+                row += 1
+
+            if row < max_h - 1:
+                safe_addstr(
+                    stdscr, row, 2,
+                    "Enter choice or press Enter to cancel:",
+                    attr_prompt, clip_borders=True
+                )
+                row += 1
+        else:
+            # No existing files found
+            safe_addstr(
+                stdscr, row, 2,
+                "No existing maps. Press 'n' to create new, 'v' toggles debug, or Enter to cancel:",
+                attr_prompt, clip_borders=True
+            )
+            row += 1
+
+        stdscr.refresh()
+
+        stdscr.nodelay(False)
+        curses.curs_set(1)
+        curses.echo()
+
+        if row < max_h:
+            try:
+                selection_bytes = stdscr.getstr(row, 2, 20)
+                if not selection_bytes:
+                    _restore_input_mode(stdscr)
+                    return ""
+                selection = selection_bytes.decode('utf-8').strip()
+            except:
+                _restore_input_mode(stdscr)
+                return ""
+        else:
+            _restore_input_mode(stdscr)
+            return ""
+
+        _restore_input_mode(stdscr)
+
+        if not selection:
+            return ""
+        if selection.lower() == 'n':
+            return "NEW_FILE"
+        elif selection.lower() == 'v':
+            debug.toggle_debug()
+            continue
+        elif selection.isdigit():
+            idx = int(selection) - 1
+            if 0 <= idx < len(files):
+                return files[idx]
+
+
+def prompt_for_filename(stdscr, prompt):
+    """
+    Prompt user for a new filename (used by the save flow).
+    Returns the typed string or "" if canceled/empty.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+
+    curses.echo()
+    curses.curs_set(1)
+    stdscr.nodelay(False)
+
+    row = 10
+    if row < max_h - 1:
+        attr = get_color_attr(CURRENT_THEME["prompt_color"])
+        safe_addstr(stdscr, row, 2, prompt, attr, clip_borders=True)
+        stdscr.refresh()
+
+        filename_bytes = stdscr.getstr(row, 2 + len(prompt) + 1, 20)
+        _restore_input_mode(stdscr)
+
+        if filename_bytes:
+            return filename_bytes.decode('utf-8', errors='ignore').strip()
+
+    _restore_input_mode(stdscr)
+    return ""
+
+
+def _draw_save_map_screen(stdscr):
+    """
+    Draws the "Save Map" header/art/instructions at the top.
+    """
+    stdscr.clear()
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    draw_screen_frame(stdscr)
+    draw_title(stdscr, "Save Map", row=1)
+
+    crocodile_lines = CURRENT_THEME["crocodile_art"]
+    _draw_art(stdscr, crocodile_lines, start_row=3, start_col=2)
+
+    instructions = [
+        "Select a map to overwrite, 'n'=new, ENTER=cancel, 'v'=toggle debug"
+    ]
+    draw_instructions(stdscr, instructions, from_bottom=3)
+
+
+def _restore_input_mode(stdscr):
+    """
+    Helper to restore no-echo, no-delay mode after user input.
+    """
+    curses.noecho()
+    curses.curs_set(0)
+    curses.napms(50)
+    curses.flushinp()
+    stdscr.nodelay(True)
+
+
+def _prompt_save_new_map(stdscr):
+    """
+    Displays "Save new map? (y/n)" at the bottom. 'y' => yes, anything else => no.
+    Returns True if user picks 'y', else False.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+    question = "Save new map? (y/n)"
+    row = max_h - 2
+    col = 2
+
+    stdscr.nodelay(False)
+    curses.curs_set(1)
+    curses.echo(0)
+
+    blank_line = " " * (max_w - 4)
+    safe_addstr(stdscr, row, col, blank_line, 0, clip_borders=True)
+    stdscr.move(row, col)
+    safe_addstr(stdscr, row, col, question, 0, clip_borders=True)
+    stdscr.refresh()
+
+    while True:
+        c = stdscr.getch()
+        if c in (ord('y'), ord('Y')):
+            _restore_input_mode(stdscr)
+            return True
+        else:
+            # 'n' / ESC / q / anything => no
+            _restore_input_mode(stdscr)
+            return False
+
+
+# --------------------------------------------------------------------
+# MERGED QUICK-SAVE CODE (removing curses_y_or_no_quicksave.py)
+# --------------------------------------------------------------------
+
+def prompt_yes_no_renderer(renderer, question):
+    """
+    A pass-through approach for a yes/no question if the 'renderer' supports it.
+    Returns True if the user picks yes, otherwise False.
+    (Note this is distinct from the curses_controls_ui.prompt_yes_no.)
+    """
+    if not renderer:
+        return False
+    if not hasattr(renderer, "prompt_yes_no"):
+        return False
+    return renderer.prompt_yes_no(question)
+
+
+def perform_quick_save(model, renderer):
+    """
+    Performs a quick save of the map data, using save_map_ui if we have a valid renderer.
+    """
+    if not renderer:
+        return
+    if not hasattr(renderer, "get_curses_window"):
+        return
+
+    ui_win = renderer.get_curses_window()
+    if not ui_win:
+        return
+
+    player = model.player
+
+    if model.loaded_map_filename:
+        # Overwrite existing
+        save_map_ui(
+            ui_win,
+            model.placed_scenery,
+            player=player,
+            world_width=model.world_width,
+            world_height=model.world_height,
+            filename_override=model.loaded_map_filename
+        )
+    else:
+        # Prompt user for new filename
+        save_map_ui(
+            ui_win,
+            model.placed_scenery,
+            player=player,
+            world_width=model.world_width,
+            world_height=model.world_height,
+            filename_override=None
+        )
+
+    # e.g. signal a redraw
+    model.full_redraw_needed = True
+
+
+# FileName: curses_scene_settings.py
+#
+# version: 1.0
+#
+# Summary: Defines the "Settings" scene, with its own while-True loop for user input.
+#
+# Tags: scene, settings
+
+import curses
+import debug
+from .curses_common import draw_screen_frame, draw_title, draw_instructions
+
+def settings_scene_ui (stdscr):
+    """
+    A placeholder 'Settings' screen. Press 'q' or ESC to return to the main menu.
+    """
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    while True:
+        stdscr.erase()
+        draw_screen_frame(stdscr)
+        draw_title(stdscr, "Settings (Placeholder)", row=1)
+
+        info_lines = [
+            "Here is where you might configure volume, video settings, etc.",
+            "Press 'q' or ESC to go back..."
+        ]
+        draw_instructions(stdscr, info_lines, from_bottom=2)
+
+        stdscr.refresh()
+
+        key = stdscr.getch()
+        if key in (ord('q'), ord('Q'), 27):
+            # 'q' or ESC => exit settings
+            return
+        elif key == ord('v'):
+            debug.toggle_debug()
+
+
+
+# FileName: curses_utils.py
+#
+# version: 1.1
+#
+# Summary: Provides safe curses output helpers and color attribute assembly.
+#
+# Tags: curses, utils
+
+import curses
+from typing import Optional
+from .curses_color_init import color_pairs
+
+def get_color_attr(color_name: str, bold: bool = False, blink: bool = False, underline: bool = False) -> int:
+    """
+    Given a color name like "white_on_black", returns a curses attribute
+    including optional BOLD/BLINK/UNDERLINE bits.
+    """
+    pair_id = color_pairs.get(color_name, 0)
+    attr = curses.color_pair(pair_id)
+    if bold:
+        attr |= curses.A_BOLD
+    if blink:
+        attr |= curses.A_BLINK
+    if underline:
+        attr |= curses.A_UNDERLINE
+    return attr
+
+def parse_two_color_names(fg_bg: str) -> (str, str):
+    """
+    Splits a string like "white_on_blue" into ("white","blue").
+    If invalid, returns ("white","black").
+    """
+    parts = fg_bg.split("_on_")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return ("white", "black")
+
+def _clip_coords_for_borders(row: int, col: int, max_h: int, max_w: int) -> (int, int):
+    if row < 1 or row > (max_h - 2):
+        return (-1, -1)
+    if col < 1:
+        col = 1
+    if col > (max_w - 2):
+        return (-1, -1)
+    return (row, col)
+
+def _truncate_for_borders_text(col: int, text: str, max_w: int) -> str:
+    available_width = (max_w - 2) - col + 1
+    if available_width < 1:
+        return ""
+    return text[:available_width]
+
+def safe_addstr(stdscr: curses.window, row: int, col: int, text: str, attr: int, clip_borders: bool = True) -> None:
+    """
+    Safely add a string at (row, col), optionally clipping to a border if clip_borders=True.
+    """
+    max_h, max_w = stdscr.getmaxyx()
+
+    if clip_borders:
+        row2, col2 = _clip_coords_for_borders(row, col, max_h, max_w)
+        if row2 < 0 or col2 < 0:
+            return
+        text = _truncate_for_borders_text(col2, text, max_w)
+        if not text:
+            return
+        row, col = row2, col2
+    else:
+        if row < 0 or row >= max_h:
+            return
+        if col < 0 or col >= max_w:
+            return
+        available_width = max_w - col
+        if available_width < 1:
+            return
+        text = text[:available_width]
+
+    try:
+        stdscr.addstr(row, col, text, attr)
+    except curses.error:
+        pass
+
+def safe_addch(stdscr: curses.window, row: int, col: int, ch, attr: int, clip_borders: bool = True) -> None:
+    """
+    Safely add a single character at (row, col).
+    """
+    max_h, max_w = stdscr.getmaxyx()
+
+    if clip_borders:
+        row2, col2 = _clip_coords_for_borders(row, col, max_h, max_w)
+        if row2 < 0 or col2 < 0:
+            return
+        row, col = row2, col2
+    else:
+        if row < 0 or row >= max_h:
+            return
+        if col < 0 or col >= max_w:
+            return
+
+    try:
+        stdscr.addch(row, col, ch, attr)
+    except curses.error:
+        pass
+
+
+# FileName: curses_art_skins.py
+#
+# version: 1.2
+#
+# Summary: Stores ASCII art or special graphics needed for titles, load screens, or decorative UI elements.
+#
+# Tags: art, ui
+
+HEADER_ART = [
+    "=== HEADER ART PLACEHOLDER ===",
+    "You can replace this with your own artwork."
+]
+
+LOADING_ART = [
+    "--- LOADING ART PLACEHOLDER ---",
+    "You can replace this with your own artwork."
+]
+
+HOMESCREEN_ART = [
+    "::: HOMESCREEN ART PLACEHOLDER :::",
+    "You can replace this with your own artwork."
+]
+
+DECORATION = [
+    "... DECORATION PLACEHOLDER ...",
+    "You can replace this with your own artwork."
+]
+
+BANNER = [
+    "~~~ BANNER PLACEHOLDER ~~~"
+]
+
+BORDERS = [
+    "+++ BORDERS PLACEHOLDER +++"
+]
+
+MAIN_MENU_ART = [
+    "     .       +  ':.  .      *              '            *  '",
+    "                  '::._                                      ",
+    "                    '._)                 * +              ' ",
+    "                          .              .        |         ",
+    "           .      o.               +            - o -.      ",
+    " o'          '    .    /  .         o             |         ",
+    "    .  *   '          /                         +           ",
+    "   .                 *          '                      .    ",
+    "                 .             .             .  .           ",
+    "   *         .   .       .                   | '.           ",
+    "  +          '+                .           - o -            ",
+    "          .                                . |              ",
+    "            '  '     ..                   +  .  . +.        ",
+    "  .                              |          .-.             ",
+    " '                 .'  * '     - o -         ) )            ",
+    " +        '   .                   |          '-´         '  ",
+    "                       +      .'                   '.       ",
+    " .           .           o      .       . .      .          ",
+    "                       '       . +~~                       .",
+]
+
+CROCODILE = [
+    "                _ ___                /^^\\ /^\\  /^^\\*",
+    "    _          *@)@) \\            ,,/ '`~`'~~ ', `\\.",
+    "  _/o\\_ _ _ _/~`.`...'~\\        ./~~..,'`','',.,' '  ~:",
+    " / `','.~,~.~  .   , . , ~|,   ,/ .,' , ,. .. ,,.   `,  ~\\*",
+    "( ' *' _ '*`_  '  .    ,`\\*/ .' ..' '  `  `   `..  `,   \\*",
+    "  V~ V~ V~ ~\\ `   ' .  '    , ' .,.,''`.,.''`.,.``. ',   \\_",
+    "  _/\\ /\\ /\\ /\\_/, . ' ,   `*/\\_ `. `. '.,  \\*",
+    "< ~ ~ '~`'~'`, .,  .   `_: ::: \\_ '      `*/ ::: \\_ `.,' . ',  \\_",
+    "  \\ ' `_  '`_    _    ',/ _::_::_ \\ _    _/ _::_::_ \\   `.,'.,`., \\-,-,-,_,_,",
+    "   `'~~ `'~~ `'~~ `'~~  \\_)(_)(_)/  `~~' \\_)(*)(*)/ ~'`\\*..*,.*,'*;*;*;*;*;"
+]
+
+
+# FileName: curses_input.py
+#
+# version: 2.3
+#
+# Summary: A curses-based front-end implementing IGameInput for user interaction.
+#          Updated to remove the 'y' => YES_QUIT logic, so only 'q'/ESC quits.
+#
+# Tags: curses, ui, rendering
+
+import curses
+from engine_interfaces import IGameInput
+
+class CursesGameInput(IGameInput):
+    """
+    Implements IGameInput for curses: get_actions() reads the keyboard buffer,
+    returns a list of action strings like ["MOVE_UP", "QUIT", "INTERACT", etc.].
+    """
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.stdscr.nodelay(True)
+        self.stdscr.keypad(True)
+        curses.curs_set(0)
+
+    def get_actions(self):
+        actions = []
+        # read up to ~5 keystrokes at once
+        for _ in range(5):
+            key = self.stdscr.getch()
+            if key == -1:
+                break
+            act = self._interpret_key(key)
+            if act:
+                actions.append(act)
+        return actions
+
+    def _interpret_key(self, key):
+        # Quit => q, Q, ESC
+        if key in (ord('q'), ord('Q'), 27):
+            return "QUIT"
+
+        # Movement
+        if key in (ord('w'), curses.KEY_UP):
+            return "MOVE_UP"
+        if key in (ord('s'), curses.KEY_DOWN):
+            return "MOVE_DOWN"
+        if key in (ord('a'), curses.KEY_LEFT):
+            return "MOVE_LEFT"
+        if key in (ord('d'), curses.KEY_RIGHT):
+            return "MOVE_RIGHT"
+
+        # Editor toggle
+        if key == ord('e'):
+            return "EDITOR_TOGGLE"
+
+        # Quick-save
+        if key == ord('o'):
+            return "SAVE_QUICK"
+
+        # Debug
+        if key == ord('v'):
+            return "DEBUG_TOGGLE"
+
+        # Interact
+        if key == ord(' '):
+            return "INTERACT"
+
+        # Editor keys
+        if key == ord('p'):
+            return "PLACE_ITEM"
+        if key == ord('x'):
+            return "REMOVE_TOP"
+        if key == ord('u'):
+            return "UNDO"
+        if key == ord('l'):
+            return "NEXT_ITEM"
+        if key == ord('k'):
+            return "PREV_ITEM"
+
+        return None
+
+
+# FileName: curses_themes.py
+#
+# version: 1.1
+#
+# Summary: Holds multiple named theme definitions (colors and ASCII art).
+#          Provides a global CURRENT_THEME for the rest of the UI.
+#
+# Tags: themes, curses
+
+from .where_curses_art_lives import (
+    HEADER_ART,
+    LOADING_ART,
+    HOMESCREEN_ART,
+    DECORATION,
+    BANNER,
+    BORDERS,
+    MAIN_MENU_ART,
+    CROCODILE
+)
+
+THEMES = {
+    "default": {
+        "border_color":              "blue_on_black",
+        "title_color":               "green_on_black",
+        "instructions_color":        "white_on_black",   
+        "text_color":                "white_on_black",
+        "ascii_art_color":           "magenta_on_black",
+
+        "highlight_selected_color":  "yellow_on_black",   
+        "highlight_unselected_color": "white_on_black", 
+
+        # Added keys to handle previously hard-coded colors:
+        "prompt_color":        "cyan_on_black",   
+        "menu_item_color":     "yellow_on_black", 
+        "confirmation_color":  "white_on_black",   
+
+        "header_art":      HEADER_ART,
+        "loading_art":     LOADING_ART,
+        "homescreen_art":  HOMESCREEN_ART,
+        "decoration_art":  DECORATION,
+        "banner_art":      BANNER,
+        "borders_art":     BORDERS,
+        "main_menu_art":   MAIN_MENU_ART,
+        "crocodile_art":   CROCODILE,
+    },
+
+    "dark": {
+        "border_color":              "magenta_on_black", 
+        "title_color":               "white_on_blue",    
+        "instructions_color":        "cyan_on_black",
+        "text_color":"yellow_on_black",   
+        "ascii_art_color":           "white_on_black",
+
+        "highlight_selected_color":  "yellow_on_black",
+        "highlight_unselected_color": "white_on_black", 
+
+        # Same added keys for a consistent dictionary:
+        "prompt_color":        "magenta_on_black",
+        "menu_item_color":     "yellow_on_black",
+        "confirmation_color":  "white_on_black",  
+
+        "header_art":      HEADER_ART,
+        "loading_art":     LOADING_ART,
+        "homescreen_art":  HOMESCREEN_ART,
+        "decoration_art":  DECORATION,
+        "banner_art":      BANNER,
+        "borders_art":     BORDERS,
+        "main_menu_art":   MAIN_MENU_ART,
+        "crocodile_art":   CROCODILE,
+    },
+}
+
+CURRENT_THEME = THEMES["default"]
+
+def set_theme(theme_name: str):
+    """
+    Switch the global CURRENT_THEME to a different named theme.
+    Fallbacks to 'default' if not found.
+    """
+    global CURRENT_THEME
+    if theme_name in THEMES:
+        CURRENT_THEME = THEMES[theme_name]
+    else:
+        CURRENT_THEME = THEMES["default"]
+

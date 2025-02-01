@@ -3,7 +3,7 @@
 #
 # Summary: Interprets user input actions for both play and editor modes.
 #          No direct curses usage. We rely on action strings from IGameInput.
-#          UI calls (quick save, yes/no prompts) are delegated to controls_ui.py.
+#          Now calls into curses_scene_save for quick save and yes/no prompts (unified).
 #
 # Tags: controls, input, main
 
@@ -16,8 +16,9 @@ from scenery_core import (
 )
 from utils_main import get_front_tile
 
-# IMPORT the new UI helpers:
-from curses_frontend.curses_y_or_n_prompt_quicksave import perform_quick_save, prompt_yes_no
+# Import updated UI helpers from curses_scene_save
+from curses_frontend.curses_scene_save import perform_quick_save, prompt_yes_no_curses
+
 
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """
@@ -34,20 +35,26 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
     did_move = False
     should_quit = False
 
-    # ACTION HANDLERS:
-
     if action == "QUIT":
         # The user pressed 'q' to leave the map.
-        # If we have a filename, quick-save directly.
+        # If we have a filename, do a quick-save immediately.
         if model.loaded_map_filename:
             perform_quick_save(model, renderer)
             should_quit = True
         else:
             # For a generated map with no filename, prompt to save first:
-            save_decision = prompt_yes_no(renderer, "Save this generated map? (y/n)")
-            if save_decision:
-                perform_quick_save(model, renderer)
-            should_quit = True
+            stdscr = None
+            if renderer and hasattr(renderer, "get_curses_window"):
+                stdscr = renderer.get_curses_window()
+
+            if stdscr:
+                save_decision = prompt_yes_no_curses(stdscr, "Save this generated map? (y/n)")
+                if save_decision:
+                    perform_quick_save(model, renderer)
+                should_quit = True
+            else:
+                # No curses window => default to not saving
+                should_quit = True
 
         return (did_move, should_quit)
 
@@ -127,7 +134,6 @@ def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirt
       - NEXT_ITEM => cycle object forward
       - PREV_ITEM => cycle object backward
     """
-    #I believe this is what tells the map to redraw when entering or exiting editor mode ?
     if not model.context.enable_editor_commands:
         return full_redraw_needed
 
@@ -135,9 +141,7 @@ def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirt
     editor_scenery_index = model.editor_scenery_index
     player = model.player
 
-    from scenery_placement_utils import (
-        place_scenery_item,
-    )
+    from scenery_placement_utils import place_scenery_item
 
     if action == "PLACE_ITEM":
         if editor_scenery_list:
@@ -192,12 +196,12 @@ def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_
     """
     Play-mode only actions: e.g. INTERACT => chop/mine
     """
-    #Full redraw between editor and play mode switch in game
     if model.context.enable_editor_commands:
         return full_redraw_needed
 
     player = model.player
     from_scenery = model.placed_scenery
+
     if action == "INTERACT":
         fx, fy = get_front_tile(player)
         tile_objs = get_objects_at(from_scenery, fx, fy)
