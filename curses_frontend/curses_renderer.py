@@ -1,16 +1,16 @@
 # FileName: curses_renderer.py
 # version: 3.9 (modified for infinite map)
 #
-# Summary: A curses-based in-game renderer implementing IGameRenderer.
-#          Renders only the camera region, ignoring world_width/height.
+# Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region, ignoring world_width/height.
+
 # Tags: curses, ui, rendering
 
 import curses
-import debug
+#import debug
 
 from engine_interfaces import IGameRenderer
 
-from .curses_color_init import init_colors
+#from .curses_color_init import init_colors
 from .curses_highlight import get_color_attr
 from .curses_utils import safe_addch, safe_addstr, parse_two_color_names
 from .curses_common import draw_screen_frame

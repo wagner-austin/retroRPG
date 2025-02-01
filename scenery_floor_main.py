@@ -1,4 +1,4 @@
-# FileName: scenery_main.py
+# FileName: scenery_floor_main.py
 # version: 3.6 (modified for infinite map)
 # Summary: Manages all scenery objects, ensuring "floor" tiles at the bottom,
 #          plus collision checks. For uninitialized tiles, we treat them as empty floor.

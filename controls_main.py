@@ -9,7 +9,7 @@
 
 import time
 import debug
-from scenery_main import (
+from scenery_floor_main import (
     get_objects_at,
     remove_scenery,
     append_scenery
@@ -100,7 +100,7 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
             context.enable_respawn = False
 
             if not model.editor_scenery_list:
-                from scenery_main import get_placeable_scenery_defs
+                from scenery_floor_main import get_placeable_scenery_defs
                 dynamic_defs = get_placeable_scenery_defs()
                 model.editor_scenery_list = [(def_id, None, None) for def_id in dynamic_defs]
         else:
@@ -134,7 +134,7 @@ def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirt
     editor_scenery_index = model.editor_scenery_index
     player = model.player
 
-    from scenery_main import (
+    from scenery_floor_main import (
         place_scenery_item,
         get_objects_at,
         remove_scenery,

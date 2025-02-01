@@ -14,7 +14,7 @@ whenever we save.
 import os
 import json
 
-from items_main import ItemInstance
+from scenery_items_main import ItemInstance
 from player_char import Player
 
 CHARACTER_FOLDER = "character"

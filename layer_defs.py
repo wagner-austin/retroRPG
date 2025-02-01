@@ -1,18 +1,31 @@
 # FileName: layer_defs.py
+# version: 1.1
 # Summary: Defines layer constants and logic to determine which layer an ID belongs to.
+# Tags: layers, definitions
 
 from scenery_defs import (
     TREE_TRUNK_ID, TREE_TOP_ID, ROCK_ID, BRIDGE_ID, BRIDGE_END_ID,
     RIVER_ID, GRASS_ID, PATH_ID, SEMICOLON_FLOOR_ID, EMPTY_FLOOR_ID
 )
 
-# Layer constants
-FLOOR_LAYER    = "floor"
-OBJECTS_LAYER  = "objects"
-ITEMS_LAYER    = "items"
-ENTITIES_LAYER = "entities"
+#############################
+# GAME LAYERS (z=10..12)
+#############################
+FLOOR_LAYER    = "floor"    # z=10
+ITEMS_LAYER = "items" #z = 11
+OBJECTS_LAYER  = "objects"  # z=12
+ENTITIES_LAYER = "entities" # z=13
 
-# Type sets
+#############################
+# UI LAYERS (z=100..101)
+#############################
+UI_HUD_LAYER   = "ui_hud"   # z=100
+UI_MENU_LAYER  = "ui_menu"  # z=101
+
+
+#############################
+# TYPE SETS
+#############################
 FLOOR_TYPE_IDS = {
     RIVER_ID,
     GRASS_ID,
@@ -42,5 +55,5 @@ def layer_for_def_id(def_id):
         return ITEMS_LAYER
     elif def_id in ENTITIES_TYPE_IDS:
         return ENTITIES_LAYER
-    # Fallback layer for unknown IDs
+    # Fallback layer if unknown
     return OBJECTS_LAYER

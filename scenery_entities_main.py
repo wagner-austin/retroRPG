@@ -1,4 +1,4 @@
-# FileName: entities_main.py
+# FileName: scenery_entities_main.py
 # version: 1.0
 # Summary: Defines entity logic or classes for monsters, NPCs, or interactive objects in the game world.
 # Tags: entities, ai, monster, npc
