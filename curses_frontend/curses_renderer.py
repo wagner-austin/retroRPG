@@ -1,5 +1,5 @@
 # FileName: curses_renderer.py
-# version: 4.2.1 (now aware of player.fg_color but leaves background logic intact)
+# version: 4.2 (modified to delegate inventory display to curses_scene_inventory)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
 #
@@ -128,7 +128,6 @@ class CursesGameRenderer(IGameRenderer):
     def _update_dirty_tiles(self, model):
         """
         Re-draw only the tiles in model.dirty_tiles, then draw the player on top.
-        The player's background logic remains intact (handled in draw_player_on_top).
         """
         max_h, max_w = self.stdscr.getmaxyx()
         blank_attr = get_color_attr("white_on_black")
@@ -140,7 +139,7 @@ class CursesGameRenderer(IGameRenderer):
                 # Call the helper from curses_tile_render
                 draw_single_tile(self.stdscr, wx, wy, sx, sy, model, blank_attr)
 
-        # After drawing all tiles, draw the player (which uses player.char and player.fg_color)
+        # After drawing all tiles, draw the player
         draw_player_on_top(self.stdscr, model, self.map_top_offset)
 
     def _draw_screen_frame(self):

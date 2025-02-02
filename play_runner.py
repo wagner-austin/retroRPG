@@ -1,11 +1,11 @@
-# FileName: map_editor.py
+# FileName: play_runner.py
 # version: 3.3
 #
 # Summary: Provides functions to load or build a GameModel & GameContext
 #          for "play" or "editor" mode. Delegates the common logic to
 #          map_model_builder.py so we don't duplicate code.
 #
-# Tags: play, runner, map, editor
+# Tags: play, runner, map
 
 from map_model_builder import build_model_common
 

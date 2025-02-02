@@ -1,6 +1,6 @@
 # FileName: player_char.py
-# version: 1.3 (modified for infinite map & player color customization)
-# Summary: Defines the Player class with movement, stats, inventory, and customizable foreground color.
+# version: 1.3 (modified to allow customizable player color)
+# Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
 # Tags: player, character, movement
 
 import debug
@@ -14,17 +14,12 @@ class Player:
         name="Hero",
         hp=100,
         level=1,
-        char="@",
-        fg_color="white"
+        char="N",
+        color_fg="magenta"   # <-- NEW: Foreground color for the player
     ):
         """
-        A unified Player constructor that supports:
-          - Position (x, y)
-          - Name, hp, level
-          - 'char' (character symbol used when drawing the player on-screen)
-          - 'fg_color' (the player's foreground color, used by the renderer)
-
-        This keeps background rendering logic untouched in the renderer.
+        A unified Player constructor that supports position, name, hp, level,
+        plus a 'char' attribute for rendering, and a 'color_fg' for the player's foreground color.
         """
         self.x = x
         self.y = y
@@ -35,8 +30,9 @@ class Player:
         # The character used when drawing the player on-screen
         self.char = char
 
-        # The foreground color used for drawing the player's symbol
-        self.fg_color = fg_color
+        # NEW: The player's foreground color (e.g., "white", "green", etc.).
+        # We will combine this FG with the floor's BG during rendering.
+        self.color_fg = color_fg
 
         # Common resource stats
         self.gold = 0
