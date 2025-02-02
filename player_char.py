@@ -1,6 +1,6 @@
 # FileName: player_char.py
-# version: 1.2 (modified for infinite map)
-# Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
+# version: 1.3 (modified for infinite map & player color customization)
+# Summary: Defines the Player class with movement, stats, inventory, and customizable foreground color.
 # Tags: player, character, movement
 
 import debug
@@ -14,11 +14,17 @@ class Player:
         name="Hero",
         hp=100,
         level=1,
-        char="@"
+        char="@",
+        fg_color="white"
     ):
         """
-        A unified Player constructor that supports position, name, hp, level,
-        plus a 'char' attribute for rendering.
+        A unified Player constructor that supports:
+          - Position (x, y)
+          - Name, hp, level
+          - 'char' (character symbol used when drawing the player on-screen)
+          - 'fg_color' (the player's foreground color, used by the renderer)
+
+        This keeps background rendering logic untouched in the renderer.
         """
         self.x = x
         self.y = y
@@ -28,6 +34,9 @@ class Player:
 
         # The character used when drawing the player on-screen
         self.char = char
+
+        # The foreground color used for drawing the player's symbol
+        self.fg_color = fg_color
 
         # Common resource stats
         self.gold = 0
@@ -71,11 +80,6 @@ class Player:
 
         new_x = self.x + dx
         new_y = self.y + dy
-
-        # Removed clamping to [0, world_width - 1] etc.
-        # We rely on collision checks or other logic instead.
-        # new_x = max(0, min(new_x, world_width - 1))
-        # new_y = max(0, min(new_y, world_height - 1))
 
         # If debug mode is ON and ignore_collisions is True, skip collision checks
         if debug.DEBUG_CONFIG["enabled"] and debug.DEBUG_CONFIG["ignore_collisions"]:
