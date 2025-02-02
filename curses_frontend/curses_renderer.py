@@ -1,5 +1,5 @@
 # FileName: curses_renderer.py
-# version: 4.1 (modified to call into curses_tile_render.py)
+# version: 4.2 (modified to delegate inventory display to curses_scene_inventory)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
 #
@@ -18,6 +18,10 @@ from .curses_scene_save import perform_quick_save, prompt_yes_no_curses
 
 # New import: the tile-drawing logic is in curses_tile_render.py
 from .curses_tile_render import draw_single_tile, draw_player_on_top
+
+# Import the inventory summary drawer (pulled out of this file).
+from .curses_scene_inventory import draw_inventory_summary
+
 
 class CursesGameRenderer(IGameRenderer):
     def __init__(self, stdscr):
@@ -102,16 +106,13 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.clear()
         self._draw_screen_frame()
 
-        # Display editor info or inventory at row=1
+        # Display editor info if in editor mode, or an inventory summary otherwise
         if model.context.enable_editor_commands and model.editor_scenery_list:
             sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
             self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
         else:
-            inv_text = (
-                f"Inventory: Gold={model.player.gold}, "
-                f"Wood={model.player.wood}, Stone={model.player.stone}"
-            )
-            self._draw_text(1, 2, inv_text)
+            # We draw the inventory summary here, calling into the dedicated function
+            draw_inventory_summary(self.stdscr, model, row=1, col=2)
 
         max_h, max_w = self.stdscr.getmaxyx()
         visible_cols = max_w

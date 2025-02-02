@@ -1,5 +1,5 @@
 # FileName: controls_common.py
-# version: 2.18 (modified to handle SHOW_INVENTORY action)
+# version: 2.19 (modified to handle SHOW_INVENTORY action)
 #
 # Summary: Interprets user input actions that apply to BOTH play and editor modes.
 #          No direct curses or curses-based code. We rely on IGameRenderer
@@ -26,14 +26,14 @@ def handle_common_actions(action, model, renderer, mark_dirty_func):
     should_quit = False
 
     if action == "QUIT":
-        # The user pressed 'q' to leave the map.
+        # The user pressed 'q' (or ESC) to leave the map.
         if model.loaded_map_filename:
             # If there's a filename, do a quick-save and quit
             renderer.quick_save(model)
             should_quit = True
         else:
             # For a generated map with no filename, ask user if they want to save
-            if renderer.prompt_yes_no("Save this generated map? (y/n)"):
+            if renderer.prompt_yes_no(""""Save this generated map? (y/n)"""):
                 renderer.quick_save(model)
             should_quit = True
 
