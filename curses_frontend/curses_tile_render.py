@@ -87,11 +87,16 @@ def draw_player_on_top(stdscr, model, map_top_offset):
             finfo = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
             floor_color_name = finfo.get("color_name", "white_on_black")
 
-        # Draw player with the floor background color
+        # Draw player with the floor-based background but the player's chosen foreground
         fg_floor, bg_floor = parse_two_color_names(floor_color_name)
-        player_color = f"white_on_{bg_floor}"
+
+        # The player's foreground color and character come only from player_char.py
+        player_fg = getattr(model.player, "color_name", "white")  # default to 'white' if not set
+        player_char = getattr(model.player, "char", "@")          # default to '@' if not set
+
+        player_color = f"{player_fg}_on_{bg_floor}"
         attr_bold = get_color_attr(player_color, bold=True)
-        safe_addch(stdscr, py, px, "@", attr_bold, clip_borders=True)
+        safe_addch(stdscr, py, px, player_char, attr_bold, clip_borders=True)
 
         # If there's a trunk/top in the same tile, it goes on top of the player
         objects_list = tile_layers.get(OBJECTS_LAYER, [])
