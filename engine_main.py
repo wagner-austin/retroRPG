@@ -6,7 +6,7 @@
 
 from engine_camera import update_camera_with_deadzone, center_camera_on_player
 from engine_framerate import manage_framerate
-from controls_main import (
+from controls.controls_main import (
     handle_common_actions,
     handle_editor_actions,
     handle_play_actions,
