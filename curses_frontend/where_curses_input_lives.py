@@ -1,9 +1,9 @@
-# FileName: curses_input.py
-#
-# version: 2.3
+# FileName: where_curses_input_lives.py
+# version: 2.4
 #
 # Summary: A curses-based front-end implementing IGameInput for user interaction.
 #          Updated to remove the 'y' => YES_QUIT logic, so only 'q'/ESC quits.
+#          Now also maps 'i' / 'I' => SHOW_INVENTORY.
 #
 # Tags: curses, ui, rendering
 
@@ -76,5 +76,9 @@ class CursesGameInput(IGameInput):
             return "NEXT_ITEM"
         if key == ord('k'):
             return "PREV_ITEM"
+
+        # Show Inventory (new)
+        if key in (ord('i'), ord('I')):
+            return "SHOW_INVENTORY"
 
         return None
