@@ -3,6 +3,7 @@
 # Summary: Handles creation of grass patches, BFS for grass regions, etc.
 # Tags: map, generation, grass
 
+from .gen_utils import flood_fill_bfs
 import random
 import math
 
@@ -68,18 +69,20 @@ def find_grass_regions(grid, width, height):
                     regions.append(region_coords)
     return regions
 
-def find_random_grass_spot(grid, width, height):
-    """
-    Return (x, y) of a random tile that is grass.
-    If none found, returns (0, 0).
-    """
-    grass_positions = []
-    for y in range(height):
-        for x in range(width):
-            if grid[y][x] is not None:
-                ch, cp = grid[y][x]
-                if ch == ' ' and cp == 'white_on_green':
-                    grass_positions.append((x, y))
-    if not grass_positions:
-        return (0, 0)
-    return random.choice(grass_positions)
+
+
+#def find_random_grass_spot(grid, width, height):
+#    """
+#    Return (x, y) of a random tile that is grass.
+#    If none found, returns (0, 0).
+#    """
+#    grass_positions = []
+#    for y in range(height):
+#        for x in range(width):
+#            if grid[y][x] is not None:
+#                ch, cp = grid[y][x]
+#                if ch == ' ' and cp == 'white_on_green':
+#                    grass_positions.append((x, y))
+#    if not grass_positions:
+#        return (0, 0)
+#    return random.choice(grass_positions)

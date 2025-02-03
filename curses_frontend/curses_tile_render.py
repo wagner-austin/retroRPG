@@ -7,12 +7,12 @@
 #
 # Tags: curses, ui, rendering
 
-import curses
+#import curses
 from .curses_utils import safe_addch, parse_two_color_names
-from .curses_highlight import get_color_attr
+from .curses_selector_highlight import get_color_attr
 from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
 from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
-from .where_curses_themes_lives import CURRENT_THEME
+#from .where_curses_themes_lives import CURRENT_THEME
 
 def draw_single_tile(stdscr, wx, wy, sx, sy, model, blank_attr):
     """

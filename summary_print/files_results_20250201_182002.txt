@@ -1,0 +1,3010 @@
+
+# FileName: main_RetroRPG.py
+# version: 1.6
+# Summary: Main entry point for RetroRPG, handling high-level init, then calling MenuFlowManager.
+# Tags: main, entry, initialization
+
+import time
+
+def main():
+    # Defer curses import to inside the main() function, so we avoid it at top-level.
+    import curses
+    # Updated import to reference the new location for MenuFlowManager
+    from curses_frontend.curses_scene_manager import MenuFlowManager
+
+    def run_game(stdscr):
+        # Let terminal size stabilize briefly (was curses.napms(100) before)
+        time.sleep(0.1)
+
+        # Create and run the menu flow manager
+        flow_manager = MenuFlowManager(stdscr)
+        flow_manager.run()
+
+    curses.wrapper(run_game)
+
+if __name__ == "__main__":
+    main()
+
+
+# FileName: debug.py
+# version: 1.0
+# Summary: Holds global debugging flags and configuration toggles (speed multipliers, log verbosity, etc.).
+# Tags: debug, config, developer
+
+DEBUG_CONFIG = {
+    "enabled":              False,
+    "ignore_collisions":    False,
+    "walk_speed_multiplier": 1,
+    # You can add more debug features here in the future.
+}
+
+
+def toggle_debug():
+    """
+    Toggle the global debug configuration on/off. 
+    When 'enabled' is True, we set all desired debug features. 
+    When 'enabled' is False, we revert them to normal.
+    """
+    DEBUG_CONFIG["enabled"] = not DEBUG_CONFIG["enabled"]
+    if DEBUG_CONFIG["enabled"]:
+        # Enable debug features
+        DEBUG_CONFIG["ignore_collisions"] = True
+        DEBUG_CONFIG["walk_speed_multiplier"] = 4  # Walk 2x faster
+    else:
+        # Disable debug features
+        DEBUG_CONFIG["ignore_collisions"] = False
+        DEBUG_CONFIG["walk_speed_multiplier"] = 1
+
+
+# FileName: engine_actionflash.py
+# version: 1.0
+# Summary: Displays and updates short-lived visual indicators (flashes) when player chops, mines, or interacts.
+# Tags: engine, feedback, effects
+
+def update_action_flash(model, mark_dirty_func):
+    """
+    Decrements the action_flash_info counter. If it's done, clears it and marks dirty.
+    """
+    if model.action_flash_info is None:
+        return
+
+    fx, fy, count = model.action_flash_info
+    count -= 1
+    if count <= 0:
+        model.action_flash_info = None
+        mark_dirty_func(fx, fy)
+    else:
+        model.action_flash_info = (fx, fy, count)
+        mark_dirty_func(fx, fy)
+
+
+# FileName: engine_camera.py
+# version: 2.8 (modified for infinite map)
+# Summary: Implements camera logic with no bounding.
+# Tags: engine, camera, scrolling
+
+from typing import Tuple
+
+def update_camera_with_deadzone(player_x: int, player_y: int,
+                                camera_x: int, camera_y: int,
+                                visible_cols: int, visible_rows: int,
+                                dead_zone: int = 3) -> Tuple[int, int]:
+    """
+    Adjust camera_x, camera_y so the player remains within the 'dead_zone' inside
+    the visible window. No bounding to any min/max.
+    """
+
+    screen_px = player_x - camera_x
+    screen_py = player_y - camera_y
+
+    # Horizontal dead-zone
+    if screen_px < dead_zone:
+        camera_x -= (dead_zone - screen_px)
+    elif screen_px > (visible_cols - dead_zone - 1):
+        camera_x += (screen_px - (visible_cols - dead_zone - 1))
+
+    # Vertical dead-zone
+    if screen_py < dead_zone:
+        camera_y -= (dead_zone - screen_py)
+    elif screen_py > (visible_rows - dead_zone - 1):
+        camera_y += (screen_py - (visible_rows - dead_zone - 1))
+
+    # Removed all clamping to a 'world_width'/'world_height'.
+    return camera_x, camera_y
+
+def center_camera_on_player(model, visible_cols: int, visible_rows: int) -> None:
+    """
+    Centers the camera on the player's position with no bounding.
+    """
+    px = model.player.x
+    py = model.player.y
+
+    model.camera_x = px - (visible_cols // 2)
+    model.camera_y = py - (visible_rows // 2)
+    # No clamp
+
+
+# FileName: engine_framerate.py
+# version: 1.0
+# Summary: Manages timing and frame delays to maintain a target FPS.
+# Tags: engine, performance, timing
+
+import time
+
+def manage_framerate(desired_fps=20):
+    """
+    Simple fixed-FPS approach using time.sleep().
+    For more advanced timing, store 'last_time' and measure dt.
+    """
+    frame_time = 1.0 / desired_fps
+    time.sleep(frame_time)
+
+
+# FileName: engine_interfaces.py
+# version: 1.2 (updated to add prompt_yes_no and quick_save)
+#
+# Summary: Provides abstract interfaces for game rendering & input systems.
+# Tags: interface, design
+
+class IGameRenderer:
+    def render(self, model):
+        """
+        Render the current state of the game model.
+        Called after the game logic updates each frame.
+        """
+        pass
+
+    def get_visible_size(self):
+        """
+        Return (visible_cols, visible_rows).
+        For example, curses might say (max_w, max_h - top_offset).
+        """
+        return (80, 25)  # fallback or placeholder
+
+    def prompt_yes_no(self, question: str) -> bool:
+        """
+        Ask the user a yes/no question. Return True if user selects yes, otherwise False.
+        Default is to return False if not implemented.
+        """
+        return False
+
+    def quick_save(self, model):
+        """
+        Perform a 'quick save' of the current map or data, if applicable.
+        Default is no-op if not implemented.
+        """
+        pass
+
+
+class IGameInput:
+    def get_actions(self):
+        """
+        Return a list of high-level action strings, e.g. ["MOVE_UP", "EDITOR_TOGGLE", "QUIT"].
+        If no input is available, returns an empty list.
+        """
+        return []
+
+
+# FileName: engine_main.py
+# version: 3.3 (modified for infinite map)
+#
+# Summary: Core game loop. Camera logic has no bounding now.
+# Tags: engine, main, loop
+
+from engine_camera import update_camera_with_deadzone, center_camera_on_player
+from engine_framerate import manage_framerate
+from controls.controls_main import (
+    handle_common_actions,
+    handle_editor_actions,
+    handle_play_actions,
+)
+from engine_respawn import handle_respawns
+from engine_actionflash import update_action_flash
+from engine_npc import update_npcs
+from engine_network import handle_network
+from scenery_floor_main import  apply_tile_effects
+from scenery_core import get_scenery_def_id_at
+
+def run_game_loop(model, context, game_input, game_renderer):
+    """
+    The main loop. We remove any bounding references to world_width/height 
+    and rely on the updated camera logic (which doesn't clamp).
+    """
+
+    model.context = context
+
+    # Center camera on player once at start
+    visible_cols, visible_rows = game_renderer.get_visible_size()
+    center_camera_on_player(model, visible_cols, visible_rows)
+
+    model.full_redraw_needed = True
+    model.should_quit = False
+
+    # We'll track camera movement each frame
+    model.ui_scroll_dx = 0
+    model.ui_scroll_dy = 0
+
+    while not model.should_quit:
+        # 1) Gather input
+        actions = game_input.get_actions()
+        for act in actions:
+            did_move, want_quit = handle_common_actions(
+                act, model, game_renderer, lambda x, y: mark_dirty(model, x, y)
+            )
+            if want_quit:
+                model.should_quit = True
+                break
+
+            model.full_redraw_needed = handle_editor_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+            model.full_redraw_needed = handle_play_actions(
+                act, model, game_renderer, model.full_redraw_needed,
+                lambda x, y: mark_dirty(model, x, y)
+            )
+
+        if model.should_quit:
+            break
+
+        # 2) Update camera logic (no bounding)
+        old_cam_x, old_cam_y = model.camera_x, model.camera_y
+        visible_cols, visible_rows = game_renderer.get_visible_size()
+
+        # world_width & world_height no longer clamp the camera
+        model.camera_x, model.camera_y = update_camera_with_deadzone(
+            model.player.x,
+            model.player.y,
+            model.camera_x,
+            model.camera_y,
+            visible_cols,
+            visible_rows,
+            dead_zone=2
+        )
+        dx = model.camera_x - old_cam_x
+        dy = model.camera_y - old_cam_y
+
+        model.ui_scroll_dx = dx
+        model.ui_scroll_dy = dy
+
+        # If camera jumped more than 1 tile, force full redraw
+        if abs(dx) > 1 or abs(dy) > 1:
+            model.full_redraw_needed = True
+
+        # 3) Game updates
+        handle_network(model)
+        update_npcs(model, lambda x, y: mark_dirty(model, x, y))
+        handle_respawns(model, lambda x, y: mark_dirty(model, x, y))
+
+        # Optional sliding
+        if context.enable_sliding and not actions:
+            tile_def_id = get_scenery_def_id_at(
+                model.player.x, model.player.y, model.placed_scenery
+            )
+            old_px, old_py = model.player.x, model.player.y
+            apply_tile_effects(
+                model.player,
+                tile_def_id,
+                model.placed_scenery,
+                is_editor=context.enable_editor_commands
+                # ignoring world_width / world_height
+            )
+            if (model.player.x, model.player.y) != (old_px, old_py):
+                mark_dirty(model, old_px, old_py)
+                mark_dirty(model, model.player.x, model.player.y)
+
+        update_action_flash(model, lambda x, y: mark_dirty(model, x, y))
+
+        # 4) Rendering
+        game_renderer.render(model)
+        model.dirty_tiles.clear()
+
+        # 5) Framerate
+        manage_framerate(20)
+
+def mark_dirty(model, x, y):
+    model.dirty_tiles.add((x, y))
+
+
+# FileName: engine_network.py
+# version: 1.0
+# Summary: Provides stubs or logic for multiplayer or network-driven interactions, sending/receiving game state.
+# Tags: engine, network, multiplayer
+
+def handle_network(model):
+    """
+    If you later want to add online or local co-op, 
+    you'd handle sending/receiving data here each frame.
+    """
+    if not hasattr(model, 'network_state'):
+        model.network_state = {'connected': False, 'host': None, 'port': None}
+    
+    # e.g. if model.network_state['connected']:
+    #     # read incoming packets, update positions
+    #     pass
+
+
+
+# FileName: engine_npc.py
+# version: 1.0
+# Summary: Updates non-player characters, handling their AI states, movement, and any interactions with the world.
+# Tags: engine, npc, ai
+
+def update_npcs(model, mark_dirty_func):
+    """
+    If you have AI or NPC creatures, you'd loop through them and do pathfinding, 
+    movement, or dialogue logic here.
+    """
+    if not hasattr(model, 'npcs'):
+        model.npcs = []
+    # for npc in model.npcs:
+    #     npc.update_ai(...)
+    #     mark_dirty_func(npc.old_x, npc.old_y)
+    #     mark_dirty_func(npc.x, npc.y)
+
+
+
+# FileName: engine_respawn.py
+# version: 1.2
+# Summary: Tracks and respawns resources (trees, rocks) after a set countdown.
+# Tags: engine, respawn, resources
+
+from scenery_core import SceneryObject, append_scenery
+
+def handle_respawns(model, mark_dirty_func):
+    """
+    If context.enable_respawn is true, decrement countdowns and respawn.
+    We expect each entry in model.respawn_list to look like:
+      { "countdown": N, "objects": [ (x, y, definition_id), ... ] }
+
+    Once countdown <= 0, we re-create those objects.
+    """
+    if not model.context.enable_respawn:
+        return
+
+    # Make a copy of the list so we can remove entries safely
+    for r in model.respawn_list[:]:
+        r["countdown"] -= 1
+        if r["countdown"] <= 0:
+            # Time to respawn these objects
+            for (sx, sy, def_id) in r["objects"]:
+                new_obj = SceneryObject(sx, sy, def_id)
+                append_scenery(model.placed_scenery, new_obj)
+                mark_dirty_func(sx, sy)
+
+            # remove from the list
+            model.respawn_list.remove(r)
+
+
+# FileName: engine_transition.py
+# version: 1.0
+# Summary: Handles scene/area transitions triggered by stepping on special tiles or meeting conditions.
+# Tags: engine, transitions
+
+def handle_transitions(model, mark_dirty_func):
+    """
+    For now, this function does nothing. In the future, you can:
+      - track a 'current_transition' in model
+      - fade screen in/out
+      - animate scene changes
+    """
+    if not hasattr(model, 'transition_state'):
+        # Could store e.g. model.transition_state = {'active': False, 'alpha': 0}
+        model.transition_state = {'active': False, 'timer': 0}
+
+    # Example usage:
+    # If model.transition_state['active']:
+    #     # do alpha fade, reduce timer, etc.
+    #     mark_dirty_func(...) as needed
+    pass
+
+
+
+# FileName: layer_manager.py
+# version: 1.1
+# Summary: A simple manager for layer info (name, z-order, visibility).
+# Tags: layers, manager
+
+from layer_defs import (
+    FLOOR_LAYER, ITEMS_LAYER, OBJECTS_LAYER, ENTITIES_LAYER,
+    UI_HUD_LAYER, UI_MENU_LAYER
+)
+
+class LayerInfo:
+    def __init__(self, name, z_order, visible=True):
+        self.name = name
+        self.z = z_order
+        self.visible = visible
+
+    def __repr__(self):
+        return f"LayerInfo(name={self.name}, z={self.z}, visible={self.visible})"
+
+
+class LayerManager:
+    def __init__(self):
+        self.layers = []
+
+    def add_layer(self, name, z_order=0, visible=True):
+        """
+        Add or update a layer with the specified name, z-order, and visibility.
+        """
+        for layer in self.layers:
+            if layer.name == name:
+                layer.z = z_order
+                layer.visible = visible
+                return
+        self.layers.append(LayerInfo(name, z_order, visible))
+
+    def get_layers_in_order(self):
+        """
+        Return the layers sorted by their z-order (lowest z first).
+        """
+        return sorted(self.layers, key=lambda l: l.z)
+
+    def set_visibility(self, layer_name, visible):
+        """
+        Toggle visibility of a given layer by name.
+        """
+        for layer in self.layers:
+            if layer.name == layer_name:
+                layer.visible = visible
+                break
+
+    def set_z_order(self, layer_name, new_z):
+        """
+        Change the z-order of a given layer by name.
+        """
+        for layer in self.layers:
+            if layer.name == layer_name:
+                layer.z = new_z
+                break
+
+
+# Create a global instance of LayerManager and define the layers.
+layer_manager = LayerManager()
+
+# Game layers with z=10..13
+layer_manager.add_layer(FLOOR_LAYER,    z_order=10, visible=True)
+layer_manager.add_layer(ITEMS_LAYER,    z_order=11, visible=True)
+layer_manager.add_layer(OBJECTS_LAYER,  z_order=12, visible=True)
+layer_manager.add_layer(ENTITIES_LAYER, z_order=13, visible=True)
+
+# UI layers with z=100..101
+layer_manager.add_layer(UI_HUD_LAYER,   z_order=100, visible=True)
+layer_manager.add_layer(UI_MENU_LAYER,  z_order=101, visible=False)
+
+
+# FileName: layer_system.py
+# version: 1.1
+# Summary: Initializes layers in the LayerManager and provides a reverse lookup for def_id -> layer_name.
+# Tags: layers, system
+
+from where_layers_live import ALL_LAYER_DEFS
+
+##############################################################################
+# We'll build a reverse lookup: def_id -> layer_name
+##############################################################################
+_def_to_layer_map = {}
+
+def init_layer_system(layer_manager):
+    """
+    1) Register each layer from ALL_LAYER_DEFS into the given layer_manager,
+       setting z_order and visibility.
+    2) Build a reverse map so we can do get_layer_for_def_id() quickly.
+    """
+    global _def_to_layer_map
+    _def_to_layer_map = {}
+
+    for layer_name, info in ALL_LAYER_DEFS.items():
+        z = info["z_order"]
+        vis = info["visible"]
+        layer_manager.add_layer(layer_name, z, vis)
+
+        for def_id in info["definition_ids"]:
+            _def_to_layer_map[def_id] = layer_name
+
+def get_layer_for_def_id(def_id):
+    """
+    Return which layer a given def_id belongs to, based on ALL_LAYER_DEFS.
+    If not found, default to "objects" (the LAYER_OBJECTS string).
+    """
+    return _def_to_layer_map.get(def_id, "objects")
+
+
+# FileName: layer_defs.py
+# version: 1.3
+# Summary: Defines layer constants and the sets of definition IDs that belong to each layer.
+#          Also has `layer_for_def_id` to map a definition ID to the right layer.
+# Tags: layers, definitions
+
+# --------------------------
+# 1) LAYER CONSTANTS
+# --------------------------
+FLOOR_LAYER    = "floor"      # z=10
+ITEMS_LAYER = "items"        #z=11
+OBJECTS_LAYER  = "objects"    # z=12
+ENTITIES_LAYER = "entities"   # z=13
+
+UI_HUD_LAYER   = "ui_hud"     # z=100
+UI_MENU_LAYER  = "ui_menu"    # z=101
+
+# --------------------------
+# 2) DEFINITION ID SETS
+#    (No imports from scenery_* here!)
+# --------------------------
+FLOOR_TYPE_IDS = {
+    "River",
+    "Grass",
+    "Path",
+    "SemicolonFloor",
+    "EmptyFloor",
+}
+
+OBJECT_TYPE_IDS = {
+    "Rock",
+    "TreeTrunk",
+    "TreeTop",
+    "Bridge",
+    "BridgeEnd",
+}
+
+ITEM_TYPE_IDS = set()      # Add if you have item definition IDs
+ENTITIES_TYPE_IDS = set()  # Add if you have entity definition IDs
+
+# --------------------------
+# 3) MAPPING FUNCTION
+# --------------------------
+def layer_for_def_id(def_id: str) -> str:
+    """
+    Return the layer name (floor, objects, etc.) for a given definition ID.
+    """
+    if def_id in FLOOR_TYPE_IDS:
+        return FLOOR_LAYER
+    elif def_id in OBJECT_TYPE_IDS:
+        return OBJECTS_LAYER
+    elif def_id in ITEM_TYPE_IDS:
+        return ITEMS_LAYER
+        # e.g. return "items"
+        return "items"
+    elif def_id in ENTITIES_TYPE_IDS:
+        return ENTITIES_LAYER
+    else:
+        # Fallback if unknown
+        return OBJECTS_LAYER
+
+
+
+# FileName: map_data_builder.py
+# version: 3.3
+# Summary: Higher-level map data read (JSON) and structure building, separate from UI code. Uses map_io_storage for the actual file ops.
+# Tags: map, io
+
+
+def build_map_data(placed_scenery, player=None,
+                   world_width=100, world_height=100):
+    """
+    Builds a Python dict representing the map data, with optional player
+    coordinates and the given world dimensions.
+
+    'placed_scenery' can be:
+      1) A dict-of-lists keyed by (x,y)
+      2) A dict-of-dicts keyed by (x,y)
+      3) A simple list of SceneryObjects
+
+    Returns a dict with keys [world_width, world_height, scenery, player_x, player_y].
+    """
+    map_data = {
+        "world_width": world_width,
+        "world_height": world_height,
+        "scenery": []
+    }
+
+    if player is not None:
+        map_data["player_x"] = player.x
+        map_data["player_y"] = player.y
+
+    def add_scenery_obj(obj):
+        if hasattr(obj, "x") and hasattr(obj, "y") and hasattr(obj, "definition_id"):
+            map_data["scenery"].append({
+                "x": obj.x,
+                "y": obj.y,
+                "definition_id": obj.definition_id
+            })
+
+    # If it's a dict, we might have nested or layered data
+    if isinstance(placed_scenery, dict):
+        for (tile_x, tile_y), tile_data in placed_scenery.items():
+            if isinstance(tile_data, list):
+                # Old-style: list of objects
+                for obj in tile_data:
+                    add_scenery_obj(obj)
+            elif isinstance(tile_data, dict):
+                # Possibly layered data
+                for layer_key, layer_val in tile_data.items():
+                    if isinstance(layer_val, list):
+                        for obj in layer_val:
+                            add_scenery_obj(obj)
+                    else:
+                        add_scenery_obj(layer_val)
+            else:
+                # skip if not recognized
+                pass
+    else:
+        # If it's just a list
+        for obj in placed_scenery:
+            add_scenery_obj(obj)
+
+    return map_data
+
+
+# FileName: map_io_storage.py
+# version: 1.2
+# Summary: Handles underlying JSON I/O logic for parsing and serializing map files,
+#          separate from UI code.
+# Tags: map, io, storage
+
+import os
+import json
+
+def parse_map_dict(raw_dict):
+    """
+    Takes a raw dictionary from JSON and extracts:
+      - world_width, world_height, scenery, extras
+    ignoring any 'player' keys.
+    """
+    world_width = raw_dict.get("world_width", 100)
+    world_height = raw_dict.get("world_height", 60)
+    scenery = raw_dict.get("scenery", [])
+
+    known_keys = {"world_width", "world_height", "scenery", "player_x", "player_y", "player"}
+    extras = {}
+    for k, v in raw_dict.items():
+        if k not in known_keys:
+            extras[k] = v
+
+    return {
+        "world_width": world_width,
+        "world_height": world_height,
+        "scenery": scenery,
+        "extras": extras
+    }
+
+def load_map_file(filepath):
+    """
+    Reads a JSON file from 'filepath' and returns the parsed dict.
+    Returns None if there's an error or if the file doesn't exist.
+    """
+    if not os.path.exists(filepath):
+        return None
+    try:
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        return data
+    except:
+        return None
+
+def save_map_file(filepath, map_data):
+    """
+    Writes 'map_data' (a dict with world_width, world_height, scenery, etc.)
+    to JSON at 'filepath'. Ignores errors.
+    Auto-creates the directory if needed.
+    """
+    try:
+        dir_name = os.path.dirname(filepath)
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+
+        with open(filepath, "w") as f:
+            json.dump(map_data, f)
+    except:
+        pass
+
+
+# FileName: map_list_logic.py
+# version: 1.1
+# Summary: Provides logic for listing, deleting, and checking map files (JSON)
+#          in the "maps" directory, separate from any specific rendering or UI.
+# Tags: map, logic, files
+
+import os
+
+def ensure_maps_dir_exists(maps_dir="maps"):
+    """
+    Ensures that the maps_dir folder exists, creating it if needed.
+    """
+    os.makedirs(maps_dir, exist_ok=True)
+
+def get_map_list(maps_dir="maps", extension=".json"):
+    """
+    Return a sorted list of all files in 'maps_dir' ending with 'extension'.
+    Ensures that 'maps_dir' is created if missing.
+    """
+    ensure_maps_dir_exists(maps_dir)
+    files = [f for f in os.listdir(maps_dir) if f.endswith(extension)]
+    files.sort()
+    return files
+
+def delete_map_file(filename, maps_dir="maps"):
+    """
+    Attempt to delete 'filename' inside 'maps_dir'.
+    Return True on successful deletion, False on failure.
+    """
+    file_path = os.path.join(maps_dir, filename)
+    try:
+        os.remove(file_path)
+        return True
+    except OSError:
+        return False
+
+def file_exists_in_maps_dir(filename, maps_dir="maps"):
+    """
+    Return True if 'filename' exists inside 'maps_dir'.
+    """
+    file_path = os.path.join(maps_dir, filename)
+    return os.path.isfile(file_path)
+
+
+# FileName: map_model_builder.py
+# version: 1.0
+#
+# Summary: Shared logic for reading map data (dict or JSON file),
+#          constructing a GameModel, and returning (model, context).
+#          Used by play_runner.py, editor code, etc.
+#
+# Tags: map, model, builder
+
+import os
+import json
+
+from map_io_storage import parse_map_dict
+from player_char import Player
+from player_char_io import load_player
+from scenery_core import SceneryObject, ensure_layered_format
+from model_main import GameModel, GameContext
+
+def build_model_common(filename_or_data, is_generated, mode_name):
+    """
+    A helper that does the heavy lifting of:
+      1) Loading raw map data from a dict or from 'maps/filename.json'
+      2) parse_map_dict() => extracting width, height, scenery
+      3) Loading (or creating) a Player object
+      4) Positioning & clamping player
+      5) Converting scenery into the layered 'placed_scenery' format
+      6) Building the GameModel and a GameContext with the given mode_name
+
+    :param filename_or_data: str (map file name) OR dict (raw JSON data)
+    :param is_generated: bool, if True => place player in center for new map
+    :param mode_name: str, e.g. "play" or "editor"
+    :return: (GameModel, GameContext) or (None, None) if loading fails
+    """
+    raw_data = None
+    model_filename = None
+
+    # 1) Read JSON or use an existing dict
+    if isinstance(filename_or_data, dict):
+        raw_data = filename_or_data
+    else:
+        model_filename = filename_or_data
+        load_path = os.path.join("maps", filename_or_data)
+        try:
+            with open(load_path, "r") as f:
+                raw_data = json.load(f)
+        except:
+            # If file read fails, return None
+            return None, None
+
+    # 2) Parse map data
+    map_data = parse_map_dict(raw_data)
+    world_width = map_data["world_width"]
+    world_height = map_data["world_height"]
+    sinfo = map_data["scenery"]
+
+    # 3) Load or create player
+    player = load_player() or Player()
+
+    # 4) Position the player
+    if is_generated:
+        # Place at center for brand-new or procedurally generated maps
+        player.x = world_width // 2
+        player.y = world_height // 2
+    else:
+        # Use the JSON-stored coords if present
+        px = raw_data.get("player_x", None)
+        py = raw_data.get("player_y", None)
+        if px is not None and py is not None:
+            player.x = px
+            player.y = py
+
+    # Clamp player location within the map boundaries
+    player.x = max(0, min(player.x, world_width - 1))
+    player.y = max(0, min(player.y, world_height - 1))
+
+    # 5) Convert the list of scenery into layered format
+    placed_scenery = {}
+    for s in sinfo:
+        if "definition_id" in s:
+            x, y = s["x"], s["y"]
+            obj = SceneryObject(x, y, s["definition_id"])
+            placed_scenery.setdefault((x, y), []).append(obj)
+    placed_scenery = ensure_layered_format(placed_scenery)
+
+    # 6) Build the model & context
+    model = GameModel()
+    model.player = player
+    model.placed_scenery = placed_scenery
+    model.world_width = world_width
+    model.world_height = world_height
+    model.loaded_map_filename = model_filename  # Could be None if brand-new
+
+    context = GameContext(mode_name=mode_name)
+
+    return model, context
+
+
+
+# FileName: model_main.py
+# version: 1.3 (modified for infinite map)
+# Summary: Defines the GameModel and GameContext. The world_width/world_height
+#          remain but are no longer used for bounding in movement or camera.
+# Tags: model, data, state
+
+class GameModel:
+    def __init__(self):
+        """
+        Stores the main world and player state:
+          - player
+          - placed_scenery (dict-of-layers)
+          - world_width, world_height (NO LONGER used for bounding)
+          - camera_x, camera_y
+          - dirty_tiles, action_flash_info
+          - etc.
+        """
+        self.player = None
+        self.placed_scenery = {}
+
+        # These remain for generation or saving, but no bounding:
+        #self.world_width = 100
+        #self.world_height = 60
+
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dirty_tiles = set()
+        self.action_flash_info = None
+
+        self.loaded_map_filename = None
+        self.full_redraw_needed = True
+        self.should_quit = False
+
+        # For respawning resources
+        self.respawn_list = []
+
+        # For editor mode
+        self.editor_scenery_list = []
+        self.editor_scenery_index = 0
+        self.editor_undo_stack = []
+
+class GameContext:
+    def __init__(self, mode_name="play"):
+        self.mode_name = mode_name
+        self.enable_editor_commands = False
+        self.enable_sliding = False
+        self.enable_respawn = False
+        self.require_bridge_supplies = False
+        self.enable_monster_ai = False
+        self.enable_damage = False
+
+        if mode_name == "editor":
+            self.enable_editor_commands = True
+            self.enable_sliding = False
+            self.enable_respawn = False
+            self.enable_monster_ai = False
+            self.enable_damage = False
+        elif mode_name == "play":
+            self.enable_editor_commands = False
+            self.enable_sliding = True
+            self.enable_respawn = True
+
+
+# FileName: map_editor.py
+# version: 3.3
+#
+# Summary: Provides functions to load or build a GameModel & GameContext
+#          for "play" or "editor" mode. Delegates the common logic to
+#          map_model_builder.py so we don't duplicate code.
+#
+# Tags: play, runner, map, editor
+
+from map_model_builder import build_model_common
+
+def build_model_for_play(filename_or_data, is_generated=False):
+    """
+    Loads map data (from filename or a provided dict) and returns
+    (model, context) with context.mode_name = 'play'.
+    
+    :param filename_or_data: str (file in 'maps' dir) or dict
+    :param is_generated: bool, center player if True
+    :return: (GameModel, GameContext) or (None, None) on failure
+    """
+    return build_model_common(filename_or_data, is_generated, mode_name="play")
+
+#def build_model_for_editor(filename_or_data, is_generated=False):
+    """
+    Loads map data (from filename or a provided dict) and returns
+    (model, context) with context.mode_name = 'editor'.
+    
+    :param filename_or_data: str (file in 'maps' dir) or dict
+    :param is_generated: bool, center player if True
+    :return: (GameModel, GameContext) or (None, None) on failure
+    """
+ #   return build_model_common(filename_or_data, is_generated, mode_name="editor")
+
+
+# FileName: player_char.py
+# version: 1.2 (modified for infinite map)
+# Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
+# Tags: player, character, movement
+
+import debug
+from scenery_core import is_blocked
+
+class Player:
+    def __init__(
+        self,
+        x=0,
+        y=0,
+        name="Hero",
+        hp=100,
+        level=1,
+        char="@"
+    ):
+        """
+        A unified Player constructor that supports position, name, hp, level,
+        plus a 'char' attribute for rendering.
+        """
+        self.x = x
+        self.y = y
+        self.name = name
+        self.hp = hp
+        self.level = level
+
+        # The character used when drawing the player on-screen
+        self.char = char
+
+        # Common resource stats
+        self.gold = 0
+        self.wood = 0
+        self.stone = 0
+
+        # Inventory system (list), and equipment slots (dict)
+        self.inventory = []
+        self.equipped = {}
+
+        # Last movement direction
+        self.last_move_direction = None
+
+    def add_item(self, item_instance):
+        """
+        Add an item_instance (from items_main.ItemInstance) to the player's inventory.
+        """
+        self.inventory.append(item_instance)
+
+    def move(self, direction, world_width, world_height, placed_scenery):
+        """
+        Move the player by 1 tile in the given direction (up/down/left/right).
+        If debug mode is ON & ignore_collisions is True, skip collision checks.
+        Otherwise, do normal collision blocking.
+
+        NOTE: No more clamping to world boundaries for infinite map.
+        """
+        dx, dy = 0, 0
+        if direction == "up":
+            dy = -1
+            self.last_move_direction = "up"
+        elif direction == "down":
+            dy = 1
+            self.last_move_direction = "down"
+        elif direction == "left":
+            dx = -1
+            self.last_move_direction = "left"
+        elif direction == "right":
+            dx = 1
+            self.last_move_direction = "right"
+
+        new_x = self.x + dx
+        new_y = self.y + dy
+
+        # Removed clamping to [0, world_width - 1] etc.
+        # We rely on collision checks or other logic instead.
+        # new_x = max(0, min(new_x, world_width - 1))
+        # new_y = max(0, min(new_y, world_height - 1))
+
+        # If debug mode is ON and ignore_collisions is True, skip collision checks
+        if debug.DEBUG_CONFIG["enabled"] and debug.DEBUG_CONFIG["ignore_collisions"]:
+            self.x = new_x
+            self.y = new_y
+        else:
+            # Normal collision check
+            if not is_blocked(new_x, new_y, placed_scenery):
+                self.x = new_x
+                self.y = new_y
+
+
+# FileName: player_char_io.py
+# version: 2.1
+# Summary: Persists or loads player data (stats, position) to/from JSON files, ensuring continuity of progress.
+# Tags: player, io
+
+"""
+Handles saving/loading the Player object to JSON (single file),
+stored in a "character" subfolder.
+
+No partial merges. We overwrite the JSON with the current data
+whenever we save.
+"""
+
+import os
+import json
+
+from scenery_items_main import ItemInstance
+from player_char import Player
+
+CHARACTER_FOLDER = "character"
+CHARACTER_FILE = os.path.join(CHARACTER_FOLDER, "character_data.json")
+
+def save_player(player, filename=CHARACTER_FILE):
+    """
+    Write player's data to 'filename' as JSON.
+
+    This includes:
+      - name, hp, level
+      - x, y (map position)
+      - gold, wood, stone
+      - entire inventory (list of items)
+      - equipped items
+    """
+    # Ensure the "character" folder exists
+    os.makedirs(CHARACTER_FOLDER, exist_ok=True)
+
+    data = {
+        "name": player.name,
+        "hp": player.hp,
+        "level": player.level,
+        "x": player.x,
+        "y": player.y,
+        "gold": player.gold,
+        "wood": player.wood,
+        "stone": player.stone,
+        "inventory": [],
+        "equipped": {},
+    }
+
+    # Fill inventory
+    for item in player.inventory:
+        data["inventory"].append({
+            "definition_id": item.definition_id,
+            "instance_data": item.instance_data
+        })
+
+    # Fill equipped
+    for slot, item in player.equipped.items():
+        if item:
+            data["equipped"][slot] = {
+                "definition_id": item.definition_id,
+                "instance_data": item.instance_data
+            }
+        else:
+            data["equipped"][slot] = None
+
+    try:
+        with open(filename, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error saving player: {e}")
+
+
+def load_player(filename=CHARACTER_FILE):
+    """
+    Read JSON from 'filename' => build a Player object => return it.
+    If file not found or error, return None.
+
+    Reconstructs each item as ItemInstance(definition_id, instance_data).
+    """
+    if not os.path.exists(filename):
+        return None
+
+    try:
+        with open(filename, "r") as f:
+            data = json.load(f)
+    except:
+        return None
+
+    # Build player
+    name = data.get("name", "Hero")
+    hp = data.get("hp", 100)
+    level = data.get("level", 1)
+
+    player = Player(
+        x=data.get("x", 0),
+        y=data.get("y", 0),
+        name=name,
+        hp=hp,
+        level=level
+    )
+    player.gold = data.get("gold", 0)
+    player.wood = data.get("wood", 0)
+    player.stone = data.get("stone", 0)
+
+    # Rebuild inventory
+    inv_list = data.get("inventory", [])
+    for it in inv_list:
+        definition_id = it.get("definition_id", "")
+        instance_data = it.get("instance_data", {})
+        item_instance = ItemInstance(definition_id, instance_data)
+        player.add_item(item_instance)
+
+    # Rebuild equipped
+    eq_dict = data.get("equipped", {})
+    for slot, info in eq_dict.items():
+        if info:
+            definition_id = info.get("definition_id", "")
+            instance_data = info.get("instance_data", {})
+            eq_item = ItemInstance(definition_id, instance_data)
+            player.equipped[slot] = eq_item
+        else:
+            player.equipped[slot] = None
+
+    return player
+
+
+# FileName: scene_save_logic.py
+# version: 1.0
+#
+# Summary: Contains logic extracted from curses_scene_save for:
+#          - Saving player data
+#          - Building and saving map data
+#          - Updating player coordinates in map
+#
+# Tags: map, save, logic
+
+import os
+import json
+
+from player_char_io import save_player
+from map_data_builder import build_map_data
+from map_io_storage import save_map_file
+from map_list_logic import file_exists_in_maps_dir
+
+
+def save_player_data(player):
+    """
+    Save the player's data (delegates to player_char_io.save_player).
+    """
+    save_player(player)
+
+
+def does_file_exist_in_maps_dir(filename):
+    """
+    Check if a file with the given filename exists in the 'maps' directory.
+    """
+    return file_exists_in_maps_dir(filename)
+
+
+def build_and_save_map(filename, placed_scenery, player, world_width, world_height):
+    """
+    Build map data from the given scenery/player, then save it to disk in the maps/ folder.
+    """
+    map_data = build_map_data(
+        placed_scenery,
+        player=player,
+        world_width=world_width,
+        world_height=world_height
+    )
+    save_map_file(f"maps/{filename}", map_data)
+
+
+def update_player_coords_in_map(filename, px, py):
+    """
+    Helper to store player's final x,y in an existing map JSON.
+    If you want to store more (e.g. gold, wood, HP), add them here.
+    """
+    maps_dir = "maps"
+    map_path = os.path.join(maps_dir, filename)
+    if not os.path.exists(map_path):
+        return
+
+    try:
+        with open(map_path, "r") as f:
+            data = json.load(f)
+
+        data["player_x"] = px
+        data["player_y"] = py
+
+        save_map_file(map_path, data)
+    except:
+        pass
+
+
+# FileName: scenery_core.py
+# version: 4.1
+# Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
+# Tags: scenery, core
+
+from layer_defs import (
+    FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER,  ITEMS_LAYER, # If you need them
+    # e.g., ITEMS_LAYER if you have one
+    layer_for_def_id
+)
+from scenery_defs import ALL_SCENERY_DEFS, build_forward_map, build_reverse_map
+
+EMPTY_FLOOR_ID = "EmptyFloor"  # so we can default to a blank floor tile if needed
+
+class SceneryObject:
+    def __init__(self, x, y, paramA, paramB=None):
+        self.x = x
+        self.y = y
+        self.definition_id = None
+        self.char = "?"
+        self.color_pair = 0
+
+        # Prepare caches once
+        if not hasattr(self.__class__, "_forward_cache"):
+            self.__class__._forward_cache = build_forward_map()
+            self.__class__._reverse_cache = build_reverse_map()
+
+        forward_map = self.__class__._forward_cache
+        reverse_map = self.__class__._reverse_cache
+
+        if paramB is None:
+            # paramA is the def_id
+            def_id = paramA
+            self.definition_id = def_id
+            char_col = forward_map.get(def_id, ("?", 0))
+            self.char = char_col[0]
+            self.color_pair = char_col[1]
+        else:
+            # paramA is a char, paramB is a color
+            c = paramA
+            col = paramB
+            self.char = c
+            self.color_pair = col
+            self.definition_id = reverse_map.get((c, col), None)
+
+
+def ensure_layered_format(placed_scenery):
+    """
+    Convert any old list-of-objects format => dict-of-layers format if needed.
+    """
+    if not placed_scenery:
+        return placed_scenery
+
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        # Already layered
+        return placed_scenery
+
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER:    None,
+            OBJECTS_LAYER:  [],
+            # If you have an ITEMS_LAYER, add it here too
+            ENTITIES_LAYER: [],
+            '_prev_floor':  None
+        }
+        for obj in obj_list:
+            which_layer = layer_for_def_id(obj.definition_id)
+            if which_layer == FLOOR_LAYER:
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[which_layer].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+def _init_tile_layers(placed_scenery, x, y):
+    """
+    Ensure placed_scenery[(x,y)] has the required layer structure.
+    """
+    if (x, y) not in placed_scenery:
+        placed_scenery[(x, y)] = {
+            FLOOR_LAYER:    None,
+            OBJECTS_LAYER:  [],
+            ENTITIES_LAYER: [],
+            '_prev_floor':  None
+        }
+        # If you have an ITEMS_LAYER, add it here
+        # e.g. "items": []
+    else:
+        tile_layers = placed_scenery[(x, y)]
+        for key in [FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER, '_prev_floor']:
+            if key not in tile_layers:
+                tile_layers[key] = None if key in (FLOOR_LAYER, '_prev_floor') else []
+
+def append_scenery(placed_scenery, obj):
+    """
+    Place a new object into the correct layer for its definition.
+    """
+    x, y = obj.x, obj.y
+    _init_tile_layers(placed_scenery, x, y)
+    tile_layers = placed_scenery[(x, y)]
+
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if (tile_layers[FLOOR_LAYER]
+            and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id):
+            # push current floor into _prev_floor
+            tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
+        tile_layers[FLOOR_LAYER] = obj
+    else:
+        # Ensure floor isn't None
+        if tile_layers[FLOOR_LAYER] is None:
+            tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers[layer_name].append(obj)
+
+def remove_scenery(placed_scenery, obj):
+    """
+    Remove a SceneryObject from its tile. If it's the floor, restore _prev_floor if available.
+    If tile becomes fully empty, revert to EMPTY_FLOOR.
+    """
+    x, y = obj.x, obj.y
+    if (x, y) not in placed_scenery:
+        return
+
+    tile_layers = placed_scenery[(x, y)]
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] == obj:
+            if tile_layers['_prev_floor'] is not None:
+                tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
+                tile_layers['_prev_floor'] = None
+            else:
+                tile_layers[FLOOR_LAYER] = None
+    else:
+        if obj in tile_layers[layer_name]:
+            tile_layers[layer_name].remove(obj)
+
+    # If it is now completely empty, revert to an EMPTY_FLOOR
+    if (tile_layers[FLOOR_LAYER] is None
+        and not tile_layers[OBJECTS_LAYER]
+        and not tile_layers[ENTITIES_LAYER]):
+        tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers['_prev_floor'] = None
+
+def get_objects_at(placed_scenery, x, y):
+    """
+    Return all objects in this tile, from floor to top.
+    """
+    if (x, y) not in placed_scenery:
+        return []
+    tile = placed_scenery[(x, y)]
+    merged = []
+    if tile[FLOOR_LAYER]:
+        merged.append(tile[FLOOR_LAYER])
+    merged.extend(tile[OBJECTS_LAYER])
+    merged.extend(tile[ENTITIES_LAYER])
+    # if you have an ITEMS_LAYER, merge it too
+    return merged
+
+def get_topmost_obj(placed_scenery, x, y):
+    stack = get_objects_at(placed_scenery, x, y)
+    return stack[-1] if stack else None
+
+def get_scenery_def_id_at(x, y, placed_scenery):
+    top = get_topmost_obj(placed_scenery, x, y)
+    return top.definition_id if top else None
+
+def get_scenery_color_at(x, y, placed_scenery):
+    top = get_topmost_obj(placed_scenery, x, y)
+    return top.color_pair if top else 0
+
+def is_blocked(x, y, placed_scenery):
+    """
+    If there's nothing here, it's not blocked. Otherwise, check the top object's 'blocking' property.
+    """
+    stack = get_objects_at(placed_scenery, x, y)
+    if not stack:
+        return False
+    top_obj = stack[-1]
+    info = ALL_SCENERY_DEFS.get(top_obj.definition_id, {})
+    return bool(info.get("blocking", False))
+
+
+
+# FileName: scenery_defs.py
+# version: 1.4
+# Summary: Holds all scenery definition IDs as constants, and loads definitions from an internal Python dict.
+# Tags: scenery, definitions
+
+import os
+import json
+
+#############################
+# SCENERY IDS AS CONSTANTS
+#############################
+TREE_TRUNK_ID       = "TreeTrunk"
+TREE_TOP_ID         = "TreeTop"
+ROCK_ID             = "Rock"
+BRIDGE_ID           = "Bridge"
+BRIDGE_END_ID       = "BridgeEnd"
+RIVER_ID            = "River"
+GRASS_ID            = "Grass"
+PATH_ID             = "Path"
+TREE_ID             = "Tree"
+BRIDGE_TOOL_ID      = "BridgeTool"
+SEMICOLON_FLOOR_ID  = "SemicolonFloor"
+EMPTY_FLOOR_ID      = "EmptyFloor"
+DEBUG_DOT_ID        = "DebugDot"
+
+#############################
+# LOAD SCENERY DEFINITIONS FROM NEW PYTHON FILE
+#############################
+# Instead of reading from a JSON file, we import the dictionary directly:
+from where_scenery_lives import ALL_SCENERY_DEFS
+
+def build_forward_map():
+    """
+    definition_id -> (char, color_name)
+    """
+    forward = {}
+    for def_id, info in ALL_SCENERY_DEFS.items():
+        c = info.get("ascii_char", "?")
+        color_name = info.get("color_name", "white_on_black")
+        forward[def_id] = (c, color_name)
+    return forward
+
+def build_reverse_map():
+    """
+    (char, color_name) -> definition_id
+    """
+    reverse = {}
+    for def_id, info in ALL_SCENERY_DEFS.items():
+        c = info.get("ascii_char", "?")
+        color_name = info.get("color_name", "white_on_black")
+        reverse[(c, color_name)] = def_id
+    return reverse
+
+__all__ = [
+    "ALL_SCENERY_DEFS",
+    "build_forward_map",
+    "build_reverse_map",
+    "TREE_TRUNK_ID",
+    "TREE_TOP_ID",
+    "ROCK_ID",
+    "BRIDGE_ID",
+    "BRIDGE_END_ID",
+    "RIVER_ID",
+    "GRASS_ID",
+    "PATH_ID",
+    "TREE_ID",
+    "BRIDGE_TOOL_ID",
+    "SEMICOLON_FLOOR_ID",
+    "EMPTY_FLOOR_ID",
+    "DEBUG_DOT_ID",
+]
+
+def get_placeable_scenery_defs():
+    """
+    Return a list of all definition IDs where 'placeable' is True
+    in the ALL_SCENERY_DEFS data.
+    """
+    return [
+        def_id
+        for def_id, info in ALL_SCENERY_DEFS.items()
+        if info.get("placeable", False)
+    ]
+
+
+
+# FileName: scenery_entities_main.py
+# version: 1.0
+# Summary: Defines entity logic or classes for monsters, NPCs, or interactive objects in the game world.
+# Tags: entities, ai, monster, npc
+
+class Monster:
+    def __init__(self, x, y, name="Goblin"):
+        self.x = x
+        self.y = y
+        self.name = name
+        self.hp = 10
+        self.attack = 2
+        self.defense = 1
+
+    def take_damage(self, amount):
+        self.hp -= amount
+        if self.hp <= 0:
+            # monster dies
+            pass
+
+class Item:
+    def __init__(self, x, y, item_type="potion"):
+        self.x = x
+        self.y = y
+        self.item_type = item_type
+
+    def on_pickup(self, player):
+        pass
+
+
+# FileName: scenery_floor_main.py
+# version: 3.7
+# Summary: Manages floor tiles (River, Grass, Path, etc.), collision checks, 
+#          layered format, and tile effects. Duplicated placement logic is removed.
+# Tags: scenery, map, collision
+
+from scenery_defs import (
+    ALL_SCENERY_DEFS,
+    build_forward_map,
+    build_reverse_map,
+    TREE_TRUNK_ID,
+    TREE_TOP_ID,
+    ROCK_ID,
+    BRIDGE_ID,
+    BRIDGE_END_ID,
+    RIVER_ID,
+    GRASS_ID,
+    PATH_ID,
+    TREE_ID,
+    BRIDGE_TOOL_ID,
+    SEMICOLON_FLOOR_ID,
+    EMPTY_FLOOR_ID,
+    DEBUG_DOT_ID
+)
+
+from layer_defs import (
+    FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER,
+    layer_for_def_id
+)
+
+# We still define register_scenery, get_placeable_scenery_defs, etc.
+# The "placement" logic now lives in scenery_placement_utils.
+
+##############################################################################
+# REGISTERING / GET-PLACEABLE DEFS
+##############################################################################
+def register_scenery(definition_id, char, color_pair, blocking, placeable):
+    ALL_SCENERY_DEFS[definition_id] = {
+        "char": char,
+        "color_pair": color_pair,
+        "blocking": blocking,
+        "placeable": placeable
+    }
+
+def get_placeable_scenery_defs():
+    return [
+        def_id
+        for def_id, info in ALL_SCENERY_DEFS.items()
+        if info.get("placeable", False)
+    ]
+
+##############################################################################
+# SCENERYOBJECT
+##############################################################################
+class SceneryObject:
+    def __init__(self, x, y, paramA, paramB=None):
+        self.x = x
+        self.y = y
+        self.definition_id = None
+        self.char = "?"
+        self.color_pair = 0
+
+        if not hasattr(self.__class__, "_forward_cache"):
+            self.__class__._forward_cache = build_forward_map()
+            self.__class__._reverse_cache = build_reverse_map()
+
+        forward_map = self.__class__._forward_cache
+        reverse_map = self.__class__._reverse_cache
+
+        if paramB is None:
+            # paramA is the def_id
+            def_id = paramA
+            self.definition_id = def_id
+            char_col = forward_map.get(def_id, ("?", 0))
+            self.char = char_col[0]
+            self.color_pair = char_col[1]
+        else:
+            # paramA is a char, paramB is a color
+            c = paramA
+            col = paramB
+            self.char = c
+            self.color_pair = col
+            self.definition_id = reverse_map.get((c, col), None)
+
+##############################################################################
+# LAYER-BASED DICTIONARY & HELPER FUNCTIONS
+##############################################################################
+def ensure_layered_format(placed_scenery):
+    if not placed_scenery:
+        return placed_scenery
+
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        return placed_scenery
+
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER: None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER: [],
+            ENTITIES_LAYER: [],
+            '_prev_floor': None
+        }
+        for obj in obj_list:
+            which_layer = layer_for_def_id(obj.definition_id)
+            if which_layer == FLOOR_LAYER:
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[which_layer].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+def _init_tile_layers(placed_scenery, x, y):
+    if (x, y) not in placed_scenery:
+        placed_scenery[(x, y)] = {
+            FLOOR_LAYER:   None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER:   [],
+            ENTITIES_LAYER: [],
+            '_prev_floor': None
+        }
+    else:
+        tile_layers = placed_scenery[(x, y)]
+        for key in [FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER, '_prev_floor']:
+            if key not in tile_layers:
+                if key in (FLOOR_LAYER, '_prev_floor'):
+                    tile_layers[key] = None
+                else:
+                    tile_layers[key] = []
+
+def append_scenery(placed_scenery, obj):
+    x, y = obj.x, obj.y
+    _init_tile_layers(placed_scenery, x, y)
+    tile_layers = placed_scenery[(x, y)]
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id:
+            tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
+        tile_layers[FLOOR_LAYER] = obj
+    else:
+        if tile_layers[FLOOR_LAYER] is None:
+            tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers[layer_name].append(obj)
+
+def remove_scenery(placed_scenery, obj):
+    x, y = obj.x, obj.y
+    if (x, y) not in placed_scenery:
+        return
+
+    tile_layers = placed_scenery[(x, y)]
+    if '_prev_floor' not in tile_layers:
+        tile_layers['_prev_floor'] = None
+
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] == obj:
+            if tile_layers['_prev_floor'] is not None:
+                tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
+                tile_layers['_prev_floor'] = None
+            else:
+                tile_layers[FLOOR_LAYER] = None
+    else:
+        if obj in tile_layers[layer_name]:
+            tile_layers[layer_name].remove(obj)
+
+    if (tile_layers[FLOOR_LAYER] is None and
+        not tile_layers[OBJECTS_LAYER] and
+        not tile_layers[ITEMS_LAYER] and
+        not tile_layers[ENTITIES_LAYER]):
+        tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers['_prev_floor'] = None
+
+def get_objects_at(placed_scenery, x, y):
+    if (x, y) not in placed_scenery:
+        return []
+    tile_layers = placed_scenery[(x, y)]
+    merged = []
+    if tile_layers[FLOOR_LAYER]:
+        merged.append(tile_layers[FLOOR_LAYER])
+    merged.extend(tile_layers[OBJECTS_LAYER])
+    merged.extend(tile_layers[ITEMS_LAYER])
+    merged.extend(tile_layers[ENTITIES_LAYER])
+    return merged
+
+##############################################################################
+# COLLISION & LOOKUP
+##############################################################################
+def is_blocked(x, y, placed_scenery):
+    merged_stack = get_objects_at(placed_scenery, x, y)
+    if not merged_stack:
+        return False
+    top_obj = merged_stack[-1]
+    info = ALL_SCENERY_DEFS.get(top_obj.definition_id, None)
+    return bool(info and info.get("blocking", False))
+
+def get_stacked_objs(x, y, placed_scenery):
+    return get_objects_at(placed_scenery, x, y)
+
+def get_topmost_obj(x, y, placed_scenery):
+    merged_stack = get_objects_at(placed_scenery, x, y)
+    return merged_stack[-1] if merged_stack else None
+
+def get_scenery_def_id_at(x, y, placed_scenery):
+    top = get_topmost_obj(x, y, placed_scenery)
+    return top.definition_id if top else None
+
+def get_scenery_color_at(x, y, placed_scenery):
+    top = get_topmost_obj(x, y, placed_scenery)
+    return top.color_pair if top else 0
+
+##############################################################################
+# TILE EFFECT LOGIC
+##############################################################################
+def apply_tile_effects(player, tile_def_id, placed_scenery,
+                       is_editor=False, world_width=100, world_height=60):
+    """
+    Example of how you could invoke special 'slide' effects or other triggers
+    based on tile definition ID.
+    """
+    if tile_def_id == PATH_ID:
+        old_x, old_y = player.x, player.y
+        player.move(player.last_move_direction, world_width, world_height, placed_scenery)
+        # If blocked, the move won't succeed, effectively ending the 'slide'.
+
+# NOTE: The repeated place_tree / place_bridge_across_river / etc.
+#       logic is now in scenery_placement_utils, so it's removed here.
+
+
+
+# FileName: items_main.py
+# version: 1.0
+# Summary: Manages item definitions, handling creation, inventory, usage effects, or item-based interactions.
+# Tags: items, gameplay, inventory
+
+
+##############################################################################
+# 1) Item Registry
+##############################################################################
+
+ALL_ITEMS = {
+    "BasicSword": {
+        "slot": "weapon",
+        "bonus_stats": {"attack": 2}
+    },
+    "HealingPotion": {
+        "consumable": True,
+        "use_func": "heal_20hp"
+    },
+    "IronArmor": {
+        "slot": "armor",
+        "bonus_stats": {"defense": 3}
+    },
+    # Add more items as needed
+}
+
+##############################################################################
+# 2) ItemInstance class
+##############################################################################
+
+class ItemInstance:
+    """
+    Represents one "instance" of an item in a player's inventory.
+    - definition_id => key in ALL_ITEMS
+    - instance_data => dict for overrides (e.g. custom name, color, etc.)
+
+    Example usage:
+        sword = ItemInstance("BasicSword", {"custom_name": "Sword of Fire", "attack_bonus": 5})
+    """
+    def __init__(self, definition_id, instance_data=None):
+        self.definition_id = definition_id
+        if instance_data is None:
+            instance_data = {}
+        self.instance_data = instance_data  # Could store durability, enchantments, etc.
+
+    @property
+    def base_def(self):
+        """
+        Returns the base item definition from ALL_ITEMS.
+        e.g. base_def["slot"], base_def["consumable"], etc.
+        """
+        return ALL_ITEMS.get(self.definition_id, {})
+
+    def get_slot(self):
+        """
+        Returns the equip slot if any. e.g. "weapon", "armor", or None
+        """
+        return self.base_def.get("slot")
+
+    def is_consumable(self):
+        """
+        Returns True if item is consumable, else False
+        """
+        return self.base_def.get("consumable", False)
+
+    def get_bonus_stats(self):
+        """
+        Combine base_def's bonus_stats with any instance overrides.
+        e.g. base bonus_stats => {"attack":2}, instance_data => {"attack_bonus":5}
+        """
+        base = self.base_def.get("bonus_stats", {})
+        # Merge with instance_data keys if relevant
+        # For example, instance_data might store extra bonus points
+        combined = dict(base)  # shallow copy
+        # If we have "attack_bonus" in instance_data, add it to combined
+        if "attack_bonus" in self.instance_data:
+            combined["attack"] = combined.get("attack", 0) + self.instance_data["attack_bonus"]
+        return combined
+
+    def __repr__(self):
+        return f"<ItemInstance({self.definition_id}, data={self.instance_data})>"
+
+
+
+# FileName: scenery_objects_main.py
+# version: 2.1
+# Summary: Manages object-specific logic (Rocks, Trees, Bridges, etc.).
+#          Now imports placement functions from scenery_placement_utils
+# Tags: scenery, objects
+
+from scenery_defs import (
+    ROCK_ID, TREE_ID, TREE_TRUNK_ID, TREE_TOP_ID,
+    BRIDGE_ID, BRIDGE_END_ID, RIVER_ID, BRIDGE_TOOL_ID
+)
+from scenery_core import (
+    get_objects_at,  # If you still need direct usage here
+    remove_scenery,
+    append_scenery
+)
+# Import the shared placement functions from the new file
+from scenery_placement_utils import (
+    place_scenery_item,
+    place_tree,
+    place_bridge_across_river
+)
+
+# If you have any other object-specific logic, you can place it here.
+# For instance, code that checks item usage or special object collisions.
+# But the actual "place_*" methods are now in scenery_placement_utils.
+
+# (No duplication here anymore!)
+
+
+
+# FileName: scenery_placement_utils.py
+# version: 1.0
+# Summary: Provides shared functions for placing scenery items (tree, bridge, etc.) 
+#          used by both scenery_floor_main.py and scenery_objects_main.py.
+# Tags: scenery, placement, utils
+
+from scenery_defs import (
+    RIVER_ID, TREE_ID, TREE_TRUNK_ID, TREE_TOP_ID,
+    BRIDGE_ID, BRIDGE_END_ID, BRIDGE_TOOL_ID
+)
+from scenery_core import (
+    SceneryObject,
+    get_objects_at,
+    remove_scenery,
+    append_scenery
+)
+
+def place_tree(player, placed_scenery, mark_dirty_func):
+    """
+    Places a tree trunk at (player.x, player.y) plus a tree top one tile above, if available.
+    """
+    px, py = player.x, player.y
+    trunk_obj = SceneryObject(px, py, TREE_TRUNK_ID)
+    append_scenery(placed_scenery, trunk_obj)
+    mark_dirty_func(px, py)
+
+    top_obj = None
+    if py > 0:
+        top_obj = SceneryObject(px, py - 1, TREE_TOP_ID)
+        append_scenery(placed_scenery, top_obj)
+        mark_dirty_func(px, py - 1)
+
+    return trunk_obj, top_obj
+
+
+def place_bridge_across_river(player, placed_scenery, mark_dirty_func,
+                              world_width=100, world_height=60, is_editor=False):
+    """
+    Creates a continuous bridge across any contiguous line of RIVER floor tiles.
+    Overwrites old BRIDGE_END objects, then places new Bridge tiles plus 'bridge ends.'
+    """
+    dx = dy = 0
+    if player.last_move_direction == "up":
+        dy = -1
+    elif player.last_move_direction == "down":
+        dy = 1
+    elif player.last_move_direction == "left":
+        dx = -1
+    elif player.last_move_direction == "right":
+        dx = 1
+
+    cx = player.x + dx
+    cy = player.y + dy
+
+    water_tiles = []
+    while True:
+        tile_objs = get_objects_at(placed_scenery, cx, cy)
+        found_river = next((o for o in tile_objs if o.definition_id == RIVER_ID), None)
+        if not found_river:
+            break
+        water_tiles.append(found_river)
+        cx += dx
+        cy += dy
+
+    if not water_tiles:
+        return []
+
+    newly_placed = []
+    for wobj in water_tiles:
+        # Remove old BRIDGE_END from the same tile
+        tile_objs2 = get_objects_at(placed_scenery, wobj.x, wobj.y)
+        ends = [o for o in tile_objs2 if o.definition_id == BRIDGE_END_ID]
+        for e in ends:
+            remove_scenery(placed_scenery, e)
+
+        new_bridge = SceneryObject(wobj.x, wobj.y, BRIDGE_ID)
+        append_scenery(placed_scenery, new_bridge)
+        mark_dirty_func(wobj.x, wobj.y)
+        newly_placed.append(new_bridge)
+
+    # Place "bridge ends" at the edges
+    start_x = water_tiles[0].x - dx
+    start_y = water_tiles[0].y - dy
+    end_x   = water_tiles[-1].x + dx
+    end_y   = water_tiles[-1].y + dy
+
+    for (ex, ey) in [(start_x, start_y), (end_x, end_y)]:
+        tile_objs3 = get_objects_at(placed_scenery, ex, ey)
+        has_bridge = any(o.definition_id == BRIDGE_ID for o in tile_objs3)
+        is_river   = any(o.definition_id == RIVER_ID  for o in tile_objs3)
+        if not has_bridge and not is_river:
+            bend = SceneryObject(ex, ey, BRIDGE_END_ID)
+            append_scenery(placed_scenery, bend)
+            mark_dirty_func(ex, ey)
+            newly_placed.append(bend)
+
+    return newly_placed
+
+
+def place_scenery_item(def_id, player, placed_scenery, mark_dirty_func,
+                       is_editor=False, world_width=100, world_height=60):
+    """
+    Places a scenery item (e.g. tree trunk, bridging across river).
+    If def_id == BRIDGE_TOOL_ID and is_editor, triggers a multi-tile bridging.
+    If def_id == TREE_ID and is_editor, places trunk + top.
+    Otherwise, just places one object at player's location.
+    """
+    newly_placed = []
+
+    if def_id == BRIDGE_TOOL_ID and is_editor:
+        new_objs = place_bridge_across_river(
+            player, placed_scenery, mark_dirty_func,
+            world_width=world_width,
+            world_height=world_height,
+            is_editor=True
+        )
+        newly_placed.extend(new_objs)
+    elif def_id == TREE_ID and is_editor:
+        trunk_obj, top_obj = place_tree(player, placed_scenery, mark_dirty_func)
+        newly_placed.append(trunk_obj)
+        if top_obj:
+            newly_placed.append(top_obj)
+    else:
+        obj = SceneryObject(player.x, player.y, def_id)
+        append_scenery(placed_scenery, obj)
+        mark_dirty_func(player.x, player.y)
+        newly_placed.append(obj)
+
+    return newly_placed
+
+
+
+#!/usr/bin/env python3
+# FileName: summary.py
+# version 1.4
+# Summary: A command-line tool to scan Python files in a project directory for:
+#   - FileName
+#   - version
+#   - Summary
+#   - Tags
+#
+# Tags: help, info, summary, tool
+#
+# Features:
+#   - Automatic discovery of *.py files (except itself, if desired)
+#   - Filtering by file(s), tags, or a search term (checks file name, FileName line,
+#     version, summary, and tags)
+#   - Optionally printing the full code for each matched file
+#   - Saving summary data as JSON:
+#      --save-json with no argument => automatically names file in ./summary_print/
+#      --save-json myfile.json => saves with a custom name
+#   - NEW: Saving all matched files’ code to a .txt file (with line breaks) via --save-code and --savecode 
+
+import os
+import re
+import json
+import sys
+import argparse
+from datetime import datetime
+from typing import List, Dict
+
+# Regex patterns for the 4 lines:
+RE_FILEHEADER = re.compile(r'^#\s*FileName\s*:\s*(.*)$', re.IGNORECASE)
+RE_VERSION    = re.compile(r'^#\s*version\s*:\s*(.*)$', re.IGNORECASE)
+RE_SUMMARY    = re.compile(r'^#\s*Summary\s*:\s*(.*)$', re.IGNORECASE)
+RE_TAGS       = re.compile(r'^#\s*Tags\s*:\s*(.*)$', re.IGNORECASE)
+
+
+class CustomArgParser(argparse.ArgumentParser):
+    """
+    Subclass ArgumentParser so that when there's an error
+    (e.g., an unrecognized argument), it prints the full
+    help text instead of just a short usage message.
+    Also overrides help to be more concise & colored.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Provide a custom usage line, remove default 'positional arguments' display
+        self.usage = "\033[1;34mUsage:\033[0m summary.py [OPTIONS] [FILES...]"
+
+    def error(self, message):
+        # Print our custom help on error
+        sys.stderr.write(f"\n\033[1;31mError:\033[0m {message}\n\n")
+        self.print_help()
+        sys.exit(2)
+
+    def print_help(self):
+        # Print a simpler, colored help message (override default).
+        # We omit big details about "positional arguments," synonyms, etc.
+        help_text = f"""
+\033[1;34mUsage:\033[0m summary.py [OPTIONS] [FILES...]
+
+\033[1;36mScan Python files for FileName, version, Summary, and Tags.\033[0m
+
+\033[1;33mOptions:\033[0m
+  \033[1;32m-r, --root\033[0m
+    Root directory to search for .py files (default is current dir).
+
+  \033[1;32m-f, --files\033[0m
+    Specific .py files to summarize. Overrides auto-discovery.
+
+  \033[1;32m-t, --tags\033[0m
+    Filter results by these tag(s). Multiple tags => include if any match.
+
+  \033[1;32m-s, --search\033[0m
+    Case-insensitive search in OS filename, FileName header, version, summary, or tags.
+
+  \033[1;32m-pc, --print-code\033[0m
+    Print the full code for each matched file to console.
+
+  \033[1;32m-sj, --save-json\033[0m  [optional filename or no argument]
+    Save results to JSON file. No argument => auto-naming.
+
+  \033[1;32m-sc, --save-code & --savecode\033[0m  [optional filename or no argument]
+    Save all matched files' code to a .txt file, with a blank line separating each file.
+    No argument => auto-naming.
+
+  \033[1;32m-h, --help\033[0m
+    Show this help message and exit.
+
+Examples:
+  summary.py --root . --tags engine --print-code
+  summary.py -s 'animation' -pc -sc code_dump.txt
+"""
+        sys.stdout.write(help_text + "\n")
+
+
+def gather_all_py_files(root_dir: str) -> List[str]:
+    """
+    Recursively gather all .py files under root_dir.
+    """
+    all_py = []
+    for dirpath, _, filenames in os.walk(root_dir):
+        for fname in filenames:
+            if fname.endswith(".py"):
+                full_path = os.path.join(dirpath, fname)
+                all_py.append(full_path)
+    return all_py
+
+
+def parse_summaries_from_file(filepath: str) -> Dict:
+    """
+    Parse the file for:
+        # FileName: ...
+        # version: ...
+        # Summary: ...
+        # Tags: ...
+    Returns a dict with:
+       {
+         "filename": os.path.basename(filepath),
+         "fullpath": filepath,
+         "header_filename": str or None,
+         "version": str or None,
+         "summary": str or None,
+         "tags": [list of strings],
+       }
+    """
+    header_filename = None
+    version_str     = None
+    summary_str     = None
+    tags_list       = []
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                line_stripped = line.strip()
+
+                # Check for each pattern
+                match_fileheader = RE_FILEHEADER.match(line_stripped)
+                if match_fileheader:
+                    header_filename = match_fileheader.group(1).strip()
+                    continue
+
+                match_version = RE_VERSION.match(line_stripped)
+                if match_version:
+                    version_str = match_version.group(1).strip()
+                    continue
+
+                match_summary = RE_SUMMARY.match(line_stripped)
+                if match_summary:
+                    summary_str = match_summary.group(1).strip()
+                    continue
+
+                match_tags = RE_TAGS.match(line_stripped)
+                if match_tags:
+                    raw_tags = match_tags.group(1).strip()
+                    tags_list = [
+                        t.strip()
+                        for t in re.split(r'[,\s]+', raw_tags)
+                        if t.strip()
+                    ]
+    except (IOError, OSError):
+        pass
+
+    return {
+        "filename": os.path.basename(filepath),
+        "fullpath": filepath,
+        "header_filename": header_filename,
+        "version": version_str,
+        "summary": summary_str,
+        "tags": tags_list
+    }
+
+
+def main():
+    parser = CustomArgParser(
+        add_help=False,  # We'll add our custom -h/--help
+        description="Scan Python files for FileName, version, Summary, and Tags."
+    )
+
+    # Add a simple custom help
+    parser.add_argument(
+        "-h", "--help",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+
+    parser.add_argument(
+        "-r", "--root",
+        default=".",
+        help="Root directory to search for .py files (default current dir)."
+    )
+    parser.add_argument(
+        "-f", "--files",
+        nargs="*",
+        default=None,
+        help="Specific .py files to summarize. This overrides auto-discovery."
+    )
+    parser.add_argument(
+        "-t", "--tags",
+        nargs="*",
+        default=None,
+        help="Filter results by these tag(s). Multiple tags => any match triggers inclusion."
+    )
+    parser.add_argument(
+        "-s", "--search",
+        default=None,
+        help="Search term (case-insensitive) in OS filename, # FileName, version, summary, or tags."
+    )
+    parser.add_argument(
+        "-pc", "--print-code",
+        action="store_true",
+        help="If specified, also print the full code for each matched file."
+    )
+    # Save JSON (auto or custom name)
+    parser.add_argument(
+        "-sj", "--save-json",
+        nargs="?",
+        const="AUTO",
+        default=None,
+        help="Save results as JSON to a file. If no argument => auto-naming."
+    )
+    # Save code to a .txt file (auto or custom name)
+    parser.add_argument(
+        "-sc", "--save-code", "--savecode",
+        nargs="?",
+        const="AUTO",
+        default=None,
+        help="Save full code of matched files to a .txt file. If no argument => auto-naming."
+    )
+
+    # Hidden positional argument(s), not shown in help
+    parser.add_argument(
+        "files_pos",
+        nargs="*",
+        help=argparse.SUPPRESS
+    )
+
+    args = parser.parse_args()
+
+    # If user asked for help, show it and exit
+    if args.help:
+        parser.print_help()
+        sys.exit(0)
+
+    # Merge positional files with --files if any
+    if args.files_pos:
+        if args.files is not None:
+            args.files.extend(args.files_pos)
+        else:
+            args.files = args.files_pos
+
+    # 1) Determine which files to process
+    if args.files:
+        py_files = [os.path.abspath(f) for f in args.files]
+    else:
+        py_files = gather_all_py_files(os.path.abspath(args.root))
+
+    # 2) Parse each file for summaries
+    all_summaries = []
+    for fpath in py_files:
+        info = parse_summaries_from_file(fpath)
+        all_summaries.append(info)
+
+    # 3) Filter by tags if specified
+    if args.tags:
+        lower_tags = [t.lower() for t in args.tags]
+        filtered = []
+        for summ in all_summaries:
+            file_tags_lower = [t.lower() for t in summ["tags"]]
+            if any(t in file_tags_lower for t in lower_tags):
+                filtered.append(summ)
+        all_summaries = filtered
+
+    # 4) Filter by search term (checks file name, FileName line, version, summary, and tags)
+    if args.search:
+        search_lower = args.search.lower()
+        filtered = []
+        for summ in all_summaries:
+            text_to_search = summ["filename"].lower()
+            if summ["header_filename"]:
+                text_to_search += " " + summ["header_filename"].lower()
+            if summ["version"]:
+                text_to_search += " " + summ["version"].lower()
+            if summ["summary"]:
+                text_to_search += " " + summ["summary"].lower()
+            if summ["tags"]:
+                text_to_search += " " + " ".join(t.lower() for t in summ["tags"])
+            if search_lower in text_to_search:
+                filtered.append(summ)
+        all_summaries = filtered
+
+    # 5) Display results in console (with some color)
+    for summ in all_summaries:
+        print(f"\033[93m{'=' * 60}\033[0m")
+        print(f"\033[92mFile:\033[0m {summ['filename']}  \033[94m(Path:\033[0m {summ['fullpath']}\033[94m)\033[0m")
+        print(f"\033[92mFileName header:\033[0m {summ['header_filename'] or '[None found]'}")
+        print(f"\033[92mVersion:\033[0m {summ['version'] or '[None found]'}")
+        print(f"\033[92mSummary:\033[0m {summ['summary'] or '[None found]'}")
+        if summ["tags"]:
+            print(f"\033[92mTags:\033[0m {', '.join(summ['tags'])}")
+        else:
+            print("\033[92mTags:\033[0m [None found]")
+
+        # 6) Print code if requested
+        if args.print_code:
+            print(f"\033[96m{'-' * 60}\033[0m")
+            print("\033[95mFile Content:\033[0m")
+            print(f"\033[96m{'-' * 60}\033[0m")
+            try:
+                with open(summ["fullpath"], "r", encoding="utf-8") as fc:
+                    code_lines = fc.read()
+                print(code_lines)
+            except Exception as e:
+                print(f"Error reading file content: {e}")
+
+    # 7) If requested, save results to JSON
+    #    (We do the "stype + date" naming if user didn't provide a filename)
+    json_file_path = None
+    if args.save_json is not None:
+        if args.save_json == "AUTO":
+            # Automatic filename
+            if args.search:
+                stype = f"search_{args.search}"
+            elif args.tags:
+                stype = "tags_" + "_".join(args.tags)
+            elif args.files:
+                stype = "files"
+            else:
+                stype = "all"
+            short_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs("./summary_print", exist_ok=True)
+            json_file_path = f"./summary_print/{stype}_results_{short_dt}.json"
+        else:
+            json_file_path = args.save_json
+
+        try:
+            with open(json_file_path, "w", encoding="utf-8") as outfile:
+                json.dump(all_summaries, outfile, indent=2)
+            print(f"\n\033[92mSaved summary data to JSON:\033[0m {json_file_path}")
+        except Exception as e:
+            print(f"Error saving JSON data: {e}")
+
+    # 8) If requested, save the full code of matched files to a text file
+    #    (We reuse the same "stype + date" pattern as JSON, just .txt)
+    if args.save_code is not None:
+        if args.save_code == "AUTO":
+            # If we already auto-named for JSON, use the same base
+            if json_file_path and args.save_json == "AUTO":
+                # same base name as the JSON, but with .txt
+                outfile_code_path = os.path.splitext(json_file_path)[0] + ".txt"
+            else:
+                # Automatic naming if JSON not used or user provided a custom JSON path
+                if args.search:
+                    stype = f"search_{args.search}"
+                elif args.tags:
+                    stype = "tags_" + "_".join(args.tags)
+                elif args.files:
+                    stype = "files"
+                else:
+                    stype = "all"
+                short_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
+                os.makedirs("./summary_print", exist_ok=True)
+                outfile_code_path = f"./summary_print/{stype}_results_{short_dt}.txt"
+        else:
+            outfile_code_path = args.save_code
+
+        try:
+            os.makedirs(os.path.dirname(outfile_code_path), exist_ok=True)
+        except OSError:
+            # Might happen if user gave just a filename without directory
+            pass
+
+        try:
+            with open(outfile_code_path, "w", encoding="utf-8") as out_file:
+                for idx, summ in enumerate(all_summaries):
+                    # Attempt to read the file code
+                    code_data = ""
+                    try:
+                        with open(summ["fullpath"], "r", encoding="utf-8") as fc:
+                            code_data = fc.read()
+                    except Exception as e:
+                        code_data = f"Error reading file: {e}\n"
+
+                    # Write a header, then the code, then a blank line
+                    out_file.write("\n")
+                    out_file.write(code_data)
+                    out_file.write("\n\n")  # blank line between files
+
+            print(f"\n\033[92mSaved code to:\033[0m {outfile_code_path}")
+        except Exception as e:
+            print(f"Error saving code to file: {e}")
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+# FileName: utils_main.py
+# version: 3.5
+# Summary: Contains miscellaneous utility functions and BFS helpers.
+# Tags: utils, general
+
+import curses
+import shutil
+from typing import List, Tuple, Callable
+from collections import deque
+
+
+def get_terminal_size():
+    try:
+        size = shutil.get_terminal_size(fallback=(0, 0))
+        if size.lines >= 10 and size.columns >= 10:
+            return size.lines, size.columns
+    except:
+        pass
+    return 60, 40
+
+
+def get_front_tile(player) -> Tuple[int, int]:
+    """
+    Returns the (x, y) coordinates of the tile directly in front of the player,
+    based on player.last_move_direction.
+    """
+    fx, fy = player.x, player.y
+    if player.last_move_direction == "up":
+        fy -= 1
+    elif player.last_move_direction == "down":
+        fy += 1
+    elif player.last_move_direction == "left":
+        fx -= 1
+    elif player.last_move_direction == "right":
+        fx += 1
+    return fx, fy
+
+
+def compute_distance_map_bfs(
+    width: int,
+    height: int,
+    start_coords: List[Tuple[int, int]],
+    passable_func: Callable[[int, int], bool]
+) -> List[List[int]]:
+    """
+    Multi-source BFS that computes a distance map from all 'start_coords'.
+    Any tile for which passable_func(x, y) is True can be traversed.
+    Returns a 2D list 'distance_map[y][x]' with BFS distance from the nearest start.
+    Tiles unreachable remain at a large default (999999).
+    """
+    INF = 999999
+    distance_map = [[INF] * width for _ in range(height)]
+    queue = deque()
+
+    # Initialize queue with starting coords
+    for (sx, sy) in start_coords:
+        if 0 <= sx < width and 0 <= sy < height:
+            distance_map[sy][sx] = 0
+            queue.append((sx, sy))
+
+    # BFS
+    while queue:
+        cx, cy = queue.popleft()
+        current_dist = distance_map[cy][cx]
+        for nx, ny in [(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)]:
+            if 0 <= nx < width and 0 <= ny < height:
+                if passable_func(nx, ny):
+                    if distance_map[ny][nx] > current_dist + 1:
+                        distance_map[ny][nx] = current_dist + 1
+                        queue.append((nx, ny))
+
+    return distance_map
+
+
+def flood_fill_bfs(
+    width: int,
+    height: int,
+    start_x: int,
+    start_y: int,
+    match_func: Callable[[int, int], bool]
+) -> List[Tuple[int, int]]:
+    """
+    A BFS that returns the connected region of coordinates for which match_func(x, y) is True.
+    Starting from (start_x, start_y), it collects all valid neighbors.
+    """
+    if not (0 <= start_x < width and 0 <= start_y < height):
+        return []
+
+    if not match_func(start_x, start_y):
+        return []
+
+    visited = set()
+    queue = deque()
+    queue.append((start_x, start_y))
+    visited.add((start_x, start_y))
+
+    directions = [(0,1), (0,-1), (1,0), (-1,0)]
+    region_coords = []
+
+    while queue:
+        cx, cy = queue.popleft()
+        region_coords.append((cx, cy))
+
+        for (dx, dy) in directions:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < width and 0 <= ny < height:
+                if (nx, ny) not in visited:
+                    if match_func(nx, ny):
+                        visited.add((nx, ny))
+                        queue.append((nx, ny))
+
+    return region_coords
+
+
+# FileName: where_layers_live.py
+# version: 1.2
+#
+# Summary:
+#   Single source of truth for:
+#    - Layer names
+#    - Their z-orders
+#    - Visibility settings
+#    - Which definition IDs belong to which layer
+#
+# Tags: layers, definitions
+
+##############################################################################
+# Layer name constants
+##############################################################################
+UI_EDITOR_OVERLAY_LAYER = "ui_editor_overlay"
+LAYER_BACKGROUND = "background"
+LAYER_GAME_WORLD = "game_world"
+
+# If you treat floor/objects/items/entities/UI as full layers, define them here, too:
+LAYER_FLOOR = "floor"       # (Previously: FLOOR_LAYER from layer_defs.py)
+LAYER_OBJECTS = "objects"   # (Previously: OBJECTS_LAYER from layer_defs.py)
+LAYER_ITEMS = "items"       # (Previously: ITEMS_LAYER from layer_defs.py)
+LAYER_ENTITIES = "entities" # (Previously: ENTITIES_LAYER from layer_defs.py)
+
+# Additional UI layers from layer_defs.py, retained here:
+UI_HUD_LAYER  = "ui_hud"
+UI_MENU_LAYER = "ui_menu"
+
+##############################################################################
+# All layer definitions
+##############################################################################
+ALL_LAYER_DEFS = {
+    # Background layer
+    LAYER_BACKGROUND: {
+        "z_order": 0,
+        "visible": True,
+        "definition_ids": []
+    },
+    # Game world layer
+    LAYER_GAME_WORLD: {
+        "z_order": 10,
+        "visible": True,
+        "definition_ids": []
+    },
+    # Editor overlay
+    UI_EDITOR_OVERLAY_LAYER: {
+        "z_order": 102,
+        "visible": True,
+        "definition_ids": []
+    },
+    # HUD/UI layers
+    UI_HUD_LAYER: {
+        "z_order": 100,
+        "visible": True,
+        "definition_ids": []
+    },
+    UI_MENU_LAYER: {
+        "z_order": 101,
+        "visible": True,
+        "definition_ids": []
+    },
+
+    # Floor layer (previously in layer_defs.py)
+    LAYER_FLOOR: {
+        "z_order": 20,
+        "visible": True,
+        "definition_ids": [
+            # Copied from FLOOR_TYPE_IDS in layer_defs.py:
+            "River",
+            "Grass",
+            "Path",
+            "SemicolonFloor",
+            "EmptyFloor",
+        ]
+    },
+    # Objects layer (previously in layer_defs.py)
+    LAYER_OBJECTS: {
+        "z_order": 30,
+        "visible": False,
+        "definition_ids": [
+            # Copied from OBJECT_TYPE_IDS in layer_defs.py:
+            "Rock",
+            "TreeTrunk",
+            "TreeTop",
+            "Bridge",
+            "BridgeEnd",
+        ]
+    },
+    # Items layer (previously in layer_defs.py)
+    LAYER_ITEMS: {
+        "z_order": 40,
+        "visible": True,
+        "definition_ids": [
+            # Copied from ITEM_TYPE_IDS in layer_defs.py (currently empty)
+        ]
+    },
+    # Entities layer (previously in layer_defs.py)
+    LAYER_ENTITIES: {
+        "z_order": 50,
+        "visible": True,
+        "definition_ids": [
+            # Copied from ENTITIES_TYPE_IDS in layer_defs.py (currently empty)
+        ]
+    },
+}
+
+
+# FileName: scenery_defs_data.py
+# version: 1.0
+# Summary: Holds the dictionary that was previously in scenery_defs_data.json, now using string-based color_name instead of numeric ascii_color.
+# Tags: data, scenery
+
+ALL_SCENERY_DEFS = {
+    "TreeTrunk": {
+        "ascii_char": "|",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/tree_trunk.png"
+    },
+    "TreeTop": {
+        "ascii_char": "§",
+        "color_name": "green_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/tree_top.png"
+    },
+    "Rock": {
+        "ascii_char": "o",
+        "color_name": "white_on_black",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/rock.png"
+    },
+    "Bridge": {
+        "ascii_char": "#",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/bridge.png"
+    },
+    "BridgeEnd": {
+        "ascii_char": "l",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/bridge_end.png"
+    },
+    "River": {
+        "ascii_char": " ",
+        "color_name": "white_on_blue",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/river.png"
+    },
+    "Grass": {
+        "ascii_char": " ",
+        "color_name": "white_on_green",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/grass.png"
+    },
+    "Path": {
+        "ascii_char": " ",
+        "color_name": "black_on_yellow",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/path.png"
+    },
+    "Tree": {
+        "ascii_char": "T",
+        "color_name": "green_on_white",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/tree.png"
+    },
+    "BridgeTool": {
+        "ascii_char": "=",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/bridge_tool.png"
+    },
+    "SemicolonFloor": {
+        "ascii_char": ";",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/semicolon_floor.png"
+    },
+    "EmptyFloor": {
+        "ascii_char": " ",
+        "color_name": "white_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/empty_floor.png"
+    },
+    "DebugDot": {
+        "ascii_char": ".",
+        "color_name": "red_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/debug_dot.png"
+    }
+}
+
+
+# FileName: curses_renderer.py
+# version: 4.3 (modified to call draw_editor_overlay after each frame)
+#
+# Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
+#
+# Tags: curses, ui, rendering
+
+import curses
+from engine_interfaces import IGameRenderer
+
+from .curses_highlight import get_color_attr
+from .curses_utils import safe_addstr
+from .curses_common import draw_screen_frame
+from .where_curses_themes_lives import CURRENT_THEME
+
+# We import the quick-save and yes/no logic from the curses scene:
+from .curses_scene_save import perform_quick_save, prompt_yes_no_curses
+
+# New import: the tile-drawing logic is in curses_tile_render.py
+from .curses_tile_render import draw_single_tile, draw_player_on_top
+
+# Import the inventory summary drawer (pulled out of this file).
+from .curses_scene_inventory import draw_inventory_summary
+
+# Import the editor overlay drawer
+from .curses_scene_editor import draw_editor_overlay
+
+
+class CursesGameRenderer(IGameRenderer):
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.map_top_offset = 3
+        self.map_side_offset = 0
+
+        self.stdscr.nodelay(True)
+        self.stdscr.keypad(True)
+        curses.curs_set(0)
+
+    def get_curses_window(self):
+        """
+        Provide access to the underlying curses window, in case other logic needs it.
+        """
+        return self.stdscr
+
+    def get_visible_size(self):
+        """
+        Overridden to return the actual curses screen size minus any offsets.
+        """
+        max_h, max_w = self.stdscr.getmaxyx()
+
+        visible_rows = max_h - self.map_top_offset
+        if visible_rows < 0:
+            visible_rows = 0
+
+        visible_cols = max_w - self.map_side_offset
+        return (visible_cols, visible_rows)
+
+    def render_scene(self, model, scene_layers):
+        """
+        Renders a set of scene layers, each dict with keys {name, z, visible}.
+        This is distinct from the normal 'render' used for in-game camera updates.
+        """
+        self.stdscr.erase()
+
+        # Sort layers by z-order
+        sorted_layers = sorted(scene_layers, key=lambda l: l["z"])
+        for layer in sorted_layers:
+            if layer.get("visible", True):
+                layer_name = layer.get("name", "")
+                self._render_layer(layer_name, model)
+
+        # Draw the editor overlay if needed
+        draw_editor_overlay(self.stdscr, model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _render_layer(self, layer_name, model):
+        """
+        By default, we only handle 'background' or 'game_world' here.
+        Additional layers could be handled with more if/else or a dictionary approach.
+        """
+        if layer_name == "background":
+            border_col = CURRENT_THEME["border_color"]
+            draw_screen_frame(self.stdscr, border_col)
+        elif layer_name == "game_world":
+            if model:
+                self._full_redraw(model)
+
+    def render(self, model):
+        """
+        Called each frame to render the current game state, possibly partially.
+        """
+        dx = getattr(model, "ui_scroll_dx", 0)
+        dy = getattr(model, "ui_scroll_dy", 0)
+
+        # If camera moved or a full redraw is requested, do a full update
+        if model.full_redraw_needed or dx != 0 or dy != 0:
+            self._full_redraw(model)
+            model.full_redraw_needed = False
+        else:
+            self._update_dirty_tiles(model)
+
+        # Reset the scroll deltas
+        model.ui_scroll_dx = 0
+        model.ui_scroll_dy = 0
+
+        # Draw the editor overlay (or nothing if editor mode is off)
+        draw_editor_overlay(self.stdscr, model)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+    def _full_redraw(self, model):
+        self.stdscr.clear()
+        self._draw_screen_frame()
+
+        # If we're not in editor mode, draw the inventory summary at the top.
+        # (The editor overlay will be drawn separately if editor mode is on.)
+        if not (model.context.enable_editor_commands and model.editor_scenery_list):
+            draw_inventory_summary(self.stdscr, model, row=1, col=2)
+
+        max_h, max_w = self.stdscr.getmaxyx()
+        visible_cols = max_w
+        visible_rows = max_h - self.map_top_offset
+
+        # Mark every tile in the visible region as dirty
+        for wx in range(model.camera_x, model.camera_x + visible_cols):
+            for wy in range(model.camera_y, model.camera_y + visible_rows):
+                model.dirty_tiles.add((wx, wy))
+
+        self._update_dirty_tiles(model)
+
+    def _update_dirty_tiles(self, model):
+        """
+        Re-draw only the tiles in model.dirty_tiles, then draw the player on top.
+        """
+        max_h, max_w = self.stdscr.getmaxyx()
+        blank_attr = get_color_attr("white_on_black")
+
+        for (wx, wy) in model.dirty_tiles:
+            sx = wx - model.camera_x
+            sy = wy - model.camera_y + self.map_top_offset
+            if 0 <= sx < max_w and 0 <= sy < max_h:
+                # Call the helper from curses_tile_render
+                draw_single_tile(self.stdscr, wx, wy, sx, sy, model, blank_attr)
+
+        # After drawing all tiles, draw the player
+        draw_player_on_top(self.stdscr, model, self.map_top_offset)
+
+    def _draw_screen_frame(self):
+        draw_screen_frame(self.stdscr)
+
+    def _draw_text(self, row, col, text, color_name=None, bold=False, underline=False):
+        if color_name is None:
+            color_name = CURRENT_THEME["text_color"]
+        attr = get_color_attr(color_name, bold=bold, underline=underline)
+        safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
+
+    # -------------------------------------------------------------------------
+    # Implement the UI-agnostic methods from IGameRenderer:
+    # -------------------------------------------------------------------------
+
+    def quick_save(self, model):
+        """
+        Perform a quick-save by delegating to the curses_scene_save logic.
+        """
+        perform_quick_save(model, self)
+
+
+# FileName: curses_tile_render.py
+# version: 1.0
+#
+# Summary:
+#   Contains common tile-drawing logic for the curses UI. Moved here from
+#   curses_renderer.py to allow a cleaner separation of responsibilities.
+#
+# Tags: curses, ui, rendering
+
+import curses
+from .curses_utils import safe_addch, parse_two_color_names
+from .curses_highlight import get_color_attr
+from scenery_defs import ALL_SCENERY_DEFS, TREE_TRUNK_ID, TREE_TOP_ID
+from layer_defs import FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER
+from .where_curses_themes_lives import CURRENT_THEME
+
+def draw_single_tile(stdscr, wx, wy, sx, sy, model, blank_attr):
+    """
+    Draw the background/floor plus any objects, items, or entities for tile (wx, wy).
+    Painted at screen coords (sx, sy). The player is NOT drawn here; that is handled
+    separately to ensure the player remains above (or below) certain objects.
+    """
+
+    # Erase any leftover character first
+    safe_addch(stdscr, sy, sx, " ", blank_attr, clip_borders=True)
+
+    tile_layers = model.placed_scenery.get((wx, wy), None)
+    if not tile_layers:
+        return
+
+    # 1) Floor
+    floor_obj = tile_layers.get(FLOOR_LAYER)
+    floor_color_name = "white_on_black"
+    if floor_obj:
+        info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+        ch = info.get("ascii_char", floor_obj.char)
+        floor_color_name = info.get("color_name", "white_on_black")
+        floor_attr = get_color_attr(floor_color_name)
+        safe_addch(stdscr, sy, sx, ch, floor_attr, clip_borders=True)
+
+    # 2) Objects, Items, Entities in that order
+    obj_list = (
+        tile_layers.get(OBJECTS_LAYER, []) +
+        tile_layers.get(ITEMS_LAYER, []) +
+        tile_layers.get(ENTITIES_LAYER, [])
+    )
+
+    for obj in obj_list:
+        info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
+        ch = info.get("ascii_char", obj.char)
+        obj_color_name = info.get("color_name", "white_on_black")
+
+        # If it's a TreeTop exactly where the player is, skip it here,
+        # so we can handle the player and tree top ordering in draw_player_on_top().
+        if obj.definition_id == TREE_TOP_ID and (wx, wy) == (model.player.x, model.player.y):
+            continue
+
+        # Combine floor BG and object FG to preserve the floor background color
+        fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+        fg_obj, _ = parse_two_color_names(obj_color_name)
+        final_color = f"{fg_obj}_on_{bg_floor}"
+        attr = get_color_attr(final_color)
+
+        safe_addch(stdscr, sy, sx, ch, attr, clip_borders=True)
+
+
+def draw_player_on_top(stdscr, model, map_top_offset):
+    """
+    Draw the player above everything, but below the tree top if it shares the same tile.
+    Then, if there's a tree trunk or tree top in the same tile, it goes on top of the player.
+
+    If you'd prefer the player to be truly on top, you can remove the trunk_tops pass below.
+    Or if you want a dedicated "player layer," you'd handle that in your layering code
+    instead of doing a manual approach here.
+    """
+    px = model.player.x - model.camera_x
+    py = model.player.y - model.camera_y + map_top_offset
+    max_h, max_w = stdscr.getmaxyx()
+
+    if 0 <= px < max_w and 0 <= py < max_h:
+        tile_layers = model.placed_scenery.get((model.player.x, model.player.y), {})
+
+        # Figure out the floor color for the background
+        floor_obj = tile_layers.get(FLOOR_LAYER)
+        floor_color_name = "white_on_black"
+        if floor_obj:
+            finfo = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+            floor_color_name = finfo.get("color_name", "white_on_black")
+
+        # Draw player with the floor background color
+        fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+        player_color = f"white_on_{bg_floor}"
+        attr_bold = get_color_attr(player_color, bold=True)
+        safe_addch(stdscr, py, px, "@", attr_bold, clip_borders=True)
+
+        # If there's a trunk/top in the same tile, it goes on top of the player
+        objects_list = tile_layers.get(OBJECTS_LAYER, [])
+        trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
+        for t_obj in trunk_tops:
+            info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
+            ch = info.get("ascii_char", t_obj.char)
+            top_color = info.get("color_name", "white_on_black")
+
+            fg_obj, _ = parse_two_color_names(top_color)
+            final_color = f"{fg_obj}_on_{bg_floor}"
+            trunk_attr = get_color_attr(final_color)
+            safe_addch(stdscr, py, px, ch, trunk_attr, clip_borders=True)
+
+

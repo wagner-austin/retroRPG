@@ -8,12 +8,13 @@
 import curses
 from engine_interfaces import IGameRenderer
 
-from .curses_highlight import get_color_attr
+from .curses_selector_highlight import get_color_attr
 from .curses_utils import safe_addstr
 from .curses_common import draw_screen_frame
 from .where_curses_themes_lives import CURRENT_THEME
 
 # We import the quick-save and yes/no logic from the curses scene:
+    
 from .curses_scene_save import perform_quick_save, prompt_yes_no_curses
 
 # New import: the tile-drawing logic is in curses_tile_render.py

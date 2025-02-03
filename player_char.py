@@ -14,8 +14,8 @@ class Player:
         name="Hero",
         hp=100,
         level=1,
-        char="N",
-        color_name="magenta"
+        char="@",
+        color_name="white"
     ):
         """
         A unified Player constructor that supports position, name, hp, level,

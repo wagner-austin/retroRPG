@@ -21,7 +21,9 @@ from .curses_color_init import init_colors
 from .curses_scene_save import handle_post_game_scene_save
 
 from player_char_io import save_player
-from play_runner import build_model_for_play
+from map_model_builder import build_model_common
+
+#from play_runner import build_model_for_play
 
 
 class MenuFlowManager:
@@ -60,7 +62,7 @@ class MenuFlowManager:
 
                     # 1) "GENERATE" => brand-new map
                     if selection == "GENERATE":
-                        model, context = build_model_for_play({}, is_generated=True)
+                        model, context = build_model_common({}, is_generated=True, mode_name="play")
                         if not model:
                             self.current_state = "HOME"
                             break
@@ -72,7 +74,7 @@ class MenuFlowManager:
 
                     # 2) A dictionary => newly generated procedural data
                     if isinstance(selection, dict):
-                        model, context = build_model_for_play(selection, is_generated=True)
+                        model, context = build_model_common (selection, is_generated=True, mode_name= "play")
                         if not model:
                             self.current_state = "HOME"
                             break
@@ -82,10 +84,12 @@ class MenuFlowManager:
                         handle_post_game_scene_save(self.stdscr, model)
                         continue
 
+
+
                     # 3) A string => existing map filename
                     if isinstance(selection, str):
                         filename = selection
-                        model, context = build_model_for_play(filename, is_generated=False)
+                        model, context = build_model_common(filename, is_generated=False, mode_name = "play")
                         if not model:
                             self.current_state = "HOME"
                             break

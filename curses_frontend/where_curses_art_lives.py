@@ -1,4 +1,4 @@
-# FileName: curses_art_skins.py
+# FileName: where_curses_art_lives.py
 #
 # version: 1.2
 #

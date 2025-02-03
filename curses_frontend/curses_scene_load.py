@@ -13,7 +13,7 @@ from procedural_map_generator.generator import generate_procedural_map
 from .curses_common import draw_screen_frame, draw_title, draw_instructions, _draw_art
 from .where_curses_themes_lives import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
-from .curses_highlight import draw_global_selector_line
+from .curses_selector_highlight import draw_global_selector_line
 
 from map_list_logic import get_map_list, delete_map_file
 

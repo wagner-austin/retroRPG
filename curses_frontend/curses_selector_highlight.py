@@ -1,4 +1,4 @@
-# FileName: curses_highlight.py
+# FileName: curses_selector_highlight.py
 #
 # version: 1.4
 #
@@ -7,7 +7,6 @@
 # Tags: selector, highlight, effects
 
 import curses
-from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, get_color_attr
 from .where_curses_themes_lives import CURRENT_THEME
 

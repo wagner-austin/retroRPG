@@ -6,7 +6,7 @@ Summary: This scene sets up the curses-based input & renderer and calls
          run_game_loop from engine_main.
 """
 
-from .where_curses_input_lives import CursesGameInput
+from .where_curses_input_is_handled import CursesGameInput
 from .curses_renderer import CursesGameRenderer
 from engine_main import run_game_loop
 

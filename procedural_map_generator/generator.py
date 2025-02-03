@@ -9,8 +9,6 @@ import random
 from .gen_rivers import spawn_rivers
 from .gen_grass import (
     spawn_large_semicircle_grass,
-    find_grass_regions,
-    find_random_grass_spot
 )
 # Potentially also import from gen_rocks, gen_trees, gen_bridges if needed:
 # from .gen_rocks import spawn_rocks
@@ -32,7 +30,7 @@ from scenery_defs import (
 import debug
 
 # Import BFS helpers from utils
-from .utils import compute_distance_map_bfs
+from .gen_utils import compute_distance_map_bfs
 
 # Build caches for converting (char, color) <-> definition_id
 FORWARD_MAP = build_forward_map()

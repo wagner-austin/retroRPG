@@ -1,4 +1,4 @@
-# FileName: utils.py
+# FileName: gen_utils.py
 # version: 1.1
 # Summary: Shared helper functions for random distribution, BFS, or coordinate checks used by generation scripts.
 # Tags: map, generation, utils
