@@ -1,25 +1,25 @@
 # FileName: gen_grass.py
-# version: 1.0
+# version: 1.1
 # Summary: Handles creation of grass patches, BFS for grass regions, etc.
 # Tags: map, generation, grass
 
-from .gen_utils import flood_fill_bfs
 import random
 import math
 
+# Import definition IDs from generator.py
+from .generator import GRASS_ID, RIVER_ID
+from .gen_utils import flood_fill_bfs
+
 def spawn_large_semicircle_grass(grid, width, height, bundles=5, patch_size=40):
     """
-    Creates 'bundles' of large grass areas. We store grass as (' ', 'white_on_green').
+    Creates 'bundles' of large grass areas. We store grass as GRASS_ID.
     """
-    # find all water positions for reference
+    # find all RIVER_ID positions for reference
     water_positions = []
     for y in range(height):
         for x in range(width):
-            if grid[y][x] is not None:
-                ch, cpair = grid[y][x]
-                # water => (ch=' ', color_name='white_on_blue')
-                if ch == ' ' and cpair == 'white_on_blue':
-                    water_positions.append((x, y))
+            if grid[y][x] == RIVER_ID:
+                water_positions.append((x, y))
 
     if not water_positions:
         return
@@ -45,7 +45,7 @@ def spawn_large_semicircle_grass(grid, width, height, bundles=5, patch_size=40):
 
             if 0 <= x < width and 0 <= y < height:
                 if grid[y][x] is None:
-                    grid[y][x] = (' ', 'white_on_green')  # grass
+                    grid[y][x] = GRASS_ID
                     placed += 1
 
 def find_grass_regions(grid, width, height):
@@ -53,36 +53,26 @@ def find_grass_regions(grid, width, height):
     regions = []
     for y in range(height):
         for x in range(width):
-            if not visited[y][x] and grid[y][x] is not None:
-                ch, cp = grid[y][x]
-                if ch == ' ' and cp == 'white_on_green':
-                    region_coords = flood_fill_bfs(
-                        width, height, x, y,
-                        match_func=lambda nx, ny: (
-                            grid[ny][nx] is not None and
-                            grid[ny][nx][0] == ' ' and
-                            grid[ny][nx][1] == 'white_on_green'
-                        )
-                    )
-                    for (rx, ry) in region_coords:
-                        visited[ry][rx] = True
-                    regions.append(region_coords)
+            if grid[y][x] == GRASS_ID and not visited[y][x]:
+                region_coords = flood_fill_bfs(
+                    width, height, x, y,
+                    match_func=lambda nx, ny: (grid[ny][nx] == GRASS_ID)
+                )
+                for (rx, ry) in region_coords:
+                    visited[ry][rx] = True
+                regions.append(region_coords)
     return regions
 
-
-
-#def find_random_grass_spot(grid, width, height):
-#    """
-#    Return (x, y) of a random tile that is grass.
-#    If none found, returns (0, 0).
-#    """
-#    grass_positions = []
-#    for y in range(height):
-#        for x in range(width):
-#            if grid[y][x] is not None:
-#                ch, cp = grid[y][x]
-#                if ch == ' ' and cp == 'white_on_green':
-#                    grass_positions.append((x, y))
-#    if not grass_positions:
-#        return (0, 0)
-#    return random.choice(grass_positions)
+def find_random_grass_spot(grid, width, height):
+    """
+    Return (x, y) of a random tile that is GRASS_ID.
+    If none found, returns (0, 0).
+    """
+    grass_positions = []
+    for y in range(height):
+        for x in range(width):
+            if grid[y][x] == GRASS_ID:
+                grass_positions.append((x, y))
+    if not grass_positions:
+        return (0, 0)
+    return random.choice(grass_positions)

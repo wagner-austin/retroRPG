@@ -1,14 +1,17 @@
 # FileName: gen_rivers.py
-# version: 1.0
-# Summary: Handles river spawning, from choosing edge points to thickening the water path.
+# version: 1.1
+# Summary: Spawns river tiles by setting them to RIVER_ID
 # Tags: map, generation, rivers
 
 import random
 
+# Import definition IDs from generator.py
+from .generator import RIVER_ID
+
 def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
     """
     Spawns a certain number of rivers (default 1-2). Each river starts on one
-    edge, ends on the opposite edge, etc.
+    edge, ends on the opposite edge, etc., storing RIVER_ID in the grid.
     """
     river_count = random.randint(min_rivers, max_rivers)
     for _ in range(river_count):
@@ -108,9 +111,8 @@ def trace_river_path_improved(start, end, width, height):
 def fill_river_alternate_widths(grid, path, width, height):
     """
     For each index i in the path:
-      if i is even => fill the tile + radius around it with water
+      if i is even => fill the tile + radius around it with RIVER_ID
       if i is odd  => fill just the center tile
-    We store water as (' ', 'white_on_blue').
     """
     wide_offsets = [
         (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1),
@@ -124,7 +126,7 @@ def fill_river_alternate_widths(grid, path, width, height):
                 nx = x + ox
                 ny = y + oy
                 if 0 <= nx < width and 0 <= ny < height:
-                    grid[ny][nx] = (' ', 'white_on_blue')
+                    grid[ny][nx] = RIVER_ID
         else:
             # 1-wide
-            grid[y][x] = (' ', 'white_on_blue')
+            grid[y][x] = RIVER_ID
