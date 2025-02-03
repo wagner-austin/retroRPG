@@ -1,4 +1,4 @@
-# FileName: curses_renderer.py
+# FileName: curses_game_renderer.py
 # version: 4.2 (modified to delegate inventory display to curses_scene_inventory)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
@@ -14,13 +14,12 @@ from .curses_common import draw_screen_frame
 from .where_curses_themes_lives import CURRENT_THEME
 
 # We import the quick-save and yes/no logic from the curses scene:
-    
-from .curses_scene_save import perform_quick_save, prompt_yes_no_curses
+from .curses_scene_save import perform_quick_save
 
-# New import: the tile-drawing logic is in curses_tile_render.py
-from .curses_tile_render import draw_single_tile, draw_player_on_top
+# The tile-drawing logic is in curses_tile_render.py
+from .curses_tile_drawing import draw_single_tile, draw_player_on_top
 
-# Import the inventory summary drawer (pulled out of this file).
+# Import the inventory summary drawer
 from .curses_scene_inventory import draw_inventory_summary
 
 
@@ -45,11 +44,9 @@ class CursesGameRenderer(IGameRenderer):
         Overridden to return the actual curses screen size minus any offsets.
         """
         max_h, max_w = self.stdscr.getmaxyx()
-
         visible_rows = max_h - self.map_top_offset
         if visible_rows < 0:
             visible_rows = 0
-
         visible_cols = max_w - self.map_side_offset
         return (visible_cols, visible_rows)
 
@@ -73,7 +70,6 @@ class CursesGameRenderer(IGameRenderer):
     def _render_layer(self, layer_name, model):
         """
         By default, we only handle 'background' or 'game_world' here.
-        Additional layers could be handled with more if/else or a dictionary approach.
         """
         if layer_name == "background":
             border_col = CURRENT_THEME["border_color"]
@@ -112,7 +108,6 @@ class CursesGameRenderer(IGameRenderer):
             sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
             self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
         else:
-            # We draw the inventory summary here, calling into the dedicated function
             draw_inventory_summary(self.stdscr, model, row=1, col=2)
 
         max_h, max_w = self.stdscr.getmaxyx()
@@ -137,10 +132,10 @@ class CursesGameRenderer(IGameRenderer):
             sx = wx - model.camera_x
             sy = wy - model.camera_y + self.map_top_offset
             if 0 <= sx < max_w and 0 <= sy < max_h:
-                # Call the helper from curses_tile_render
+                # Paint this tile
                 draw_single_tile(self.stdscr, wx, wy, sx, sy, model, blank_attr)
 
-        # After drawing all tiles, draw the player
+        # After drawing all tiles, draw the player on top
         draw_player_on_top(self.stdscr, model, self.map_top_offset)
 
     def _draw_screen_frame(self):
@@ -151,10 +146,6 @@ class CursesGameRenderer(IGameRenderer):
             color_name = CURRENT_THEME["text_color"]
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
-
-    # -------------------------------------------------------------------------
-    # Implement the UI-agnostic methods from IGameRenderer:
-    # -------------------------------------------------------------------------
 
     def quick_save(self, model):
         """

@@ -1,4 +1,4 @@
-# FileName: curses_scene_manager.py
+# FileName: curses_menu_flow_manager.py
 # version: 3.7
 #
 # Summary: High-level MenuFlowManager for main menu screens (HOME, SETTINGS, GAME).
@@ -6,24 +6,18 @@
 #
 # Tags: scene, menu, manager
 
-import os
-import json
-import curses  # needed for user input
-
 from .curses_scene_home import home_scene_ui
 from .curses_scene_settings import settings_scene_ui
 from .curses_scene_load import load_scene_ui
 from .curses_scene_game import game_scene_ui
 from .curses_color_init import init_colors
-#from .curses_controls_ui import prompt_yes_no
+
 
 # We now import the dedicated save logic from curses_scene_save
 from .curses_scene_save import handle_post_game_scene_save
 
 from player_char_io import save_player
 from map_model_builder import build_model_common
-
-#from play_runner import build_model_for_play
 
 
 class MenuFlowManager:

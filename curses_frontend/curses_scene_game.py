@@ -7,7 +7,7 @@ Summary: This scene sets up the curses-based input & renderer and calls
 """
 
 from .where_curses_input_is_handled import CursesGameInput
-from .curses_renderer import CursesGameRenderer
+from .curses_game_renderer import CursesGameRenderer
 from engine_main import run_game_loop
 
 def game_scene_ui(stdscr, model, context):
