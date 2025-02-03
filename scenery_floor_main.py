@@ -6,8 +6,6 @@
 
 from scenery_defs import (
     ALL_SCENERY_DEFS,
-    build_forward_map,
-    build_reverse_map,
     TREE_TRUNK_ID,
     TREE_TOP_ID,
     ROCK_ID,
@@ -36,8 +34,8 @@ from layer_defs import (
 ##############################################################################
 def register_scenery(definition_id, char, color_pair, blocking, placeable):
     ALL_SCENERY_DEFS[definition_id] = {
-        "char": char,
-        "color_pair": color_pair,
+        "ascii_char": char,      # renamed "char" -> "ascii_char" for consistency
+        "color_name": color_pair,
         "blocking": blocking,
         "placeable": placeable
     }
@@ -53,34 +51,23 @@ def get_placeable_scenery_defs():
 # SCENERYOBJECT
 ##############################################################################
 class SceneryObject:
-    def __init__(self, x, y, paramA, paramB=None):
+    def __init__(self, x, y, definition_id):
+        """
+        A simpler constructor that directly uses a definition ID.
+        We'll look up ascii_char and color_name from ALL_SCENERY_DEFS if desired.
+        """
         self.x = x
         self.y = y
-        self.definition_id = None
+        self.definition_id = definition_id
+
+        # Default char + color
         self.char = "?"
-        self.color_pair = 0
+        self.color_pair = "white_on_black"
 
-        if not hasattr(self.__class__, "_forward_cache"):
-            self.__class__._forward_cache = build_forward_map()
-            self.__class__._reverse_cache = build_reverse_map()
-
-        forward_map = self.__class__._forward_cache
-        reverse_map = self.__class__._reverse_cache
-
-        if paramB is None:
-            # paramA is the def_id
-            def_id = paramA
-            self.definition_id = def_id
-            char_col = forward_map.get(def_id, ("?", 0))
-            self.char = char_col[0]
-            self.color_pair = char_col[1]
-        else:
-            # paramA is a char, paramB is a color
-            c = paramA
-            col = paramB
-            self.char = c
-            self.color_pair = col
-            self.definition_id = reverse_map.get((c, col), None)
+        # Lookup in ALL_SCENERY_DEFS
+        info = ALL_SCENERY_DEFS.get(definition_id, {})
+        self.char = info.get("ascii_char", "?")
+        self.color_pair = info.get("color_name", "white_on_black")
 
 ##############################################################################
 # LAYER-BASED DICTIONARY & HELPER FUNCTIONS

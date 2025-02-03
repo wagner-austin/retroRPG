@@ -3,45 +3,34 @@
 # Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
 # Tags: scenery, core
 
+# If you still have these constants somewhere, or replaced them with your new system, adjust accordingly:
 from layer_defs import (
     FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER,  # If you need them
     # e.g., ITEMS_LAYER if you have one
     layer_for_def_id
 )
-from scenery_defs import ALL_SCENERY_DEFS, build_forward_map, build_reverse_map
+# Import your unified definitions from scenery_defs or scenery_manager
+from scenery_defs import ALL_SCENERY_DEFS
 
 EMPTY_FLOOR_ID = "EmptyFloor"  # so we can default to a blank floor tile if needed
 
 class SceneryObject:
-    def __init__(self, x, y, paramA, paramB=None):
+    def __init__(self, x, y, definition_id):
+        """
+        A simpler constructor that directly uses a definition ID, without the
+        old forward/reverse maps. We can still store 'char' and 'color_pair'
+        from ALL_SCENERY_DEFS if desired.
+        """
         self.x = x
         self.y = y
-        self.definition_id = None
+        self.definition_id = definition_id
         self.char = "?"
-        self.color_pair = 0
+        self.color_pair = "white_on_black"
 
-        # Prepare caches once
-        if not hasattr(self.__class__, "_forward_cache"):
-            self.__class__._forward_cache = build_forward_map()
-            self.__class__._reverse_cache = build_reverse_map()
-
-        forward_map = self.__class__._forward_cache
-        reverse_map = self.__class__._reverse_cache
-
-        if paramB is None:
-            # paramA is the def_id
-            def_id = paramA
-            self.definition_id = def_id
-            char_col = forward_map.get(def_id, ("?", 0))
-            self.char = char_col[0]
-            self.color_pair = char_col[1]
-        else:
-            # paramA is a char, paramB is a color
-            c = paramA
-            col = paramB
-            self.char = c
-            self.color_pair = col
-            self.definition_id = reverse_map.get((c, col), None)
+        # Optionally, if you want to read default ASCII/ color from ALL_SCENERY_DEFS:
+        info = ALL_SCENERY_DEFS.get(definition_id, {})
+        self.char = info.get("ascii_char", "?")
+        self.color_pair = info.get("color_name", "white_on_black")
 
 
 def ensure_layered_format(placed_scenery):
@@ -173,7 +162,7 @@ def get_scenery_def_id_at(x, y, placed_scenery):
 
 def get_scenery_color_at(x, y, placed_scenery):
     top = get_topmost_obj(placed_scenery, x, y)
-    return top.color_pair if top else 0
+    return getattr(top, "color_pair", "white_on_black") if top else "white_on_black"
 
 def is_blocked(x, y, placed_scenery):
     """

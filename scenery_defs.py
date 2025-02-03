@@ -29,7 +29,8 @@ DEBUG_DOT_ID        = "DebugDot"
 # Instead of reading from a JSON file, we import the dictionary directly:
 from where_scenery_lives import ALL_SCENERY_DEFS
 
-def build_forward_map():
+
+def d_build_forward_map():
     """
     definition_id -> (char, color_name)
     """
@@ -40,7 +41,7 @@ def build_forward_map():
         forward[def_id] = (c, color_name)
     return forward
 
-def build_reverse_map():
+def d_build_reverse_map():
     """
     (char, color_name) -> definition_id
     """
@@ -53,8 +54,8 @@ def build_reverse_map():
 
 __all__ = [
     "ALL_SCENERY_DEFS",
-    "build_forward_map",
-    "build_reverse_map",
+    #"d_build_forward_map",
+    #"d_build_reverse_map",
     "TREE_TRUNK_ID",
     "TREE_TOP_ID",
     "ROCK_ID",
