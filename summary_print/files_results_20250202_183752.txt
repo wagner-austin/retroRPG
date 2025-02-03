@@ -1,0 +1,766 @@
+
+# FileName: layer_defs.py
+# version: 1.3
+# Summary: Defines layer constants and the sets of definition IDs that belong to each layer.
+#          Also has `layer_for_def_id` to map a definition ID to the right layer.
+# Tags: layers, definitions
+
+# --------------------------
+# 1) LAYER CONSTANTS
+# --------------------------
+FLOOR_LAYER    = "floor"      # z=10
+ITEMS_LAYER = "items"
+OBJECTS_LAYER  = "objects"    # z=11
+ENTITIES_LAYER = "entities"   # z=12
+
+UI_HUD_LAYER   = "ui_hud"     # z=100
+UI_MENU_LAYER  = "ui_menu"    # z=101
+
+# --------------------------
+# 2) DEFINITION ID SETS
+#    (No imports from scenery_* here!)
+# --------------------------
+FLOOR_TYPE_IDS = {
+    "River",
+    "Grass",
+    "Path",
+    "SemicolonFloor",
+    "EmptyFloor",
+}
+
+OBJECT_TYPE_IDS = {
+    "Rock",
+    "TreeTrunk",
+    "TreeTop",
+    "Bridge",
+    "BridgeEnd",
+}
+
+ITEM_TYPE_IDS = set()      # Add if you have item definition IDs
+ENTITIES_TYPE_IDS = set()  # Add if you have entity definition IDs
+
+# --------------------------
+# 3) MAPPING FUNCTION
+# --------------------------
+def layer_for_def_id(def_id: str) -> str:
+    """
+    Return the layer name (floor, objects, etc.) for a given definition ID.
+    """
+    if def_id in FLOOR_TYPE_IDS:
+        return FLOOR_LAYER
+    elif def_id in OBJECT_TYPE_IDS:
+        return OBJECTS_LAYER
+    elif def_id in ITEM_TYPE_IDS:
+        return ITEMS_LAYER
+        # e.g. return "items"
+        return "items"
+    elif def_id in ENTITIES_TYPE_IDS:
+        return ENTITIES_LAYER
+    else:
+        # Fallback if unknown
+        return OBJECTS_LAYER
+
+
+
+# FileName: scenery_defs.py
+# version: 1.4
+# Summary: Holds all scenery definition IDs as constants, and loads definitions from an internal Python dict.
+# Tags: scenery, definitions
+
+import os
+import json
+
+#############################
+# SCENERY IDS AS CONSTANTS
+#############################
+TREE_TRUNK_ID       = "TreeTrunk"
+TREE_TOP_ID         = "TreeTop"
+ROCK_ID             = "Rock"
+BRIDGE_ID           = "Bridge"
+BRIDGE_END_ID       = "BridgeEnd"
+RIVER_ID            = "River"
+GRASS_ID            = "Grass"
+PATH_ID             = "Path"
+TREE_ID             = "Tree"
+BRIDGE_TOOL_ID      = "BridgeTool"
+SEMICOLON_FLOOR_ID  = "SemicolonFloor"
+EMPTY_FLOOR_ID      = "EmptyFloor"
+DEBUG_DOT_ID        = "DebugDot"
+
+#############################
+# LOAD SCENERY DEFINITIONS FROM NEW PYTHON FILE
+#############################
+# Instead of reading from a JSON file, we import the dictionary directly:
+from where_scenery_lives import ALL_SCENERY_DEFS
+
+
+def d_build_forward_map():
+    """
+    definition_id -> (char, color_name)
+    """
+    forward = {}
+    for def_id, info in ALL_SCENERY_DEFS.items():
+        c = info.get("ascii_char", "?")
+        color_name = info.get("color_name", "white_on_black")
+        forward[def_id] = (c, color_name)
+    return forward
+
+def d_build_reverse_map():
+    """
+    (char, color_name) -> definition_id
+    """
+    reverse = {}
+    for def_id, info in ALL_SCENERY_DEFS.items():
+        c = info.get("ascii_char", "?")
+        color_name = info.get("color_name", "white_on_black")
+        reverse[(c, color_name)] = def_id
+    return reverse
+
+__all__ = [
+    "ALL_SCENERY_DEFS",
+    #"d_build_forward_map",
+    #"d_build_reverse_map",
+    "TREE_TRUNK_ID",
+    "TREE_TOP_ID",
+    "ROCK_ID",
+    "BRIDGE_ID",
+    "BRIDGE_END_ID",
+    "RIVER_ID",
+    "GRASS_ID",
+    "PATH_ID",
+    "TREE_ID",
+    "BRIDGE_TOOL_ID",
+    "SEMICOLON_FLOOR_ID",
+    "EMPTY_FLOOR_ID",
+    "DEBUG_DOT_ID",
+]
+
+def get_placeable_scenery_defs():
+    """
+    Return a list of all definition IDs where 'placeable' is True
+    in the ALL_SCENERY_DEFS data.
+    """
+    return [
+        def_id
+        for def_id, info in ALL_SCENERY_DEFS.items()
+        if info.get("placeable", False)
+    ]
+
+
+
+# FileName: where_scenery_lives.py
+# version: 1.0
+# Summary: Holds the dictionary that was previously in scenery_defs_data.json, now using string-based color_name instead of numeric ascii_color.
+# Tags: data, scenery
+
+ALL_SCENERY_DEFS = {
+    "TreeTrunk": {
+        "ascii_char": "|",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/tree_trunk.png"
+    },
+    "TreeTop": {
+        "ascii_char": "§",
+        "color_name": "green_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/tree_top.png"
+    },
+    "Rock": {
+        "ascii_char": "o",
+        "color_name": "white_on_black",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/rock.png"
+    },
+    "Bridge": {
+        "ascii_char": "#",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/bridge.png"
+    },
+    "BridgeEnd": {
+        "ascii_char": "l",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/bridge_end.png"
+    },
+    "River": {
+        "ascii_char": " ",
+        "color_name": "white_on_blue",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/river.png"
+    },
+    "Grass": {
+        "ascii_char": " ",
+        "color_name": "white_on_green",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/grass.png"
+    },
+    "Path": {
+        "ascii_char": " ",
+        "color_name": "black_on_yellow",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/path.png"
+    },
+    "Tree": {
+        "ascii_char": "T",
+        "color_name": "green_on_white",
+        "blocking": True,
+        "placeable": True,
+        "tile_image": "assets/tiles/tree.png"
+    },
+    "BridgeTool": {
+        "ascii_char": "=",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": True,
+        "tile_image": "assets/tiles/bridge_tool.png"
+    },
+    "SemicolonFloor": {
+        "ascii_char": ";",
+        "color_name": "yellow_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/semicolon_floor.png"
+    },
+    "EmptyFloor": {
+        "ascii_char": " ",
+        "color_name": "white_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/empty_floor.png"
+    },
+    "DebugDot": {
+        "ascii_char": ".",
+        "color_name": "red_on_black",
+        "blocking": False,
+        "placeable": False,
+        "tile_image": "assets/tiles/debug_dot.png"
+    }
+}
+
+
+# FileName: scenery_floor_main.py
+# version: 3.7
+# Summary: Manages floor tiles (River, Grass, Path, etc.), collision checks, 
+#          layered format, and tile effects. Duplicated placement logic is removed.
+# Tags: scenery, map, collision
+
+from scenery_defs import (
+    ALL_SCENERY_DEFS,
+    TREE_TRUNK_ID,
+    TREE_TOP_ID,
+    ROCK_ID,
+    BRIDGE_ID,
+    BRIDGE_END_ID,
+    RIVER_ID,
+    GRASS_ID,
+    PATH_ID,
+    TREE_ID,
+    BRIDGE_TOOL_ID,
+    SEMICOLON_FLOOR_ID,
+    EMPTY_FLOOR_ID,
+    DEBUG_DOT_ID
+)
+
+from layer_defs import (
+    FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER,
+    layer_for_def_id
+)
+
+# We still define register_scenery, get_placeable_scenery_defs, etc.
+# The "placement" logic now lives in scenery_placement_utils.
+
+##############################################################################
+# REGISTERING / GET-PLACEABLE DEFS
+##############################################################################
+def register_scenery(definition_id, char, color_pair, blocking, placeable):
+    ALL_SCENERY_DEFS[definition_id] = {
+        "ascii_char": char,      # renamed "char" -> "ascii_char" for consistency
+        "color_name": color_pair,
+        "blocking": blocking,
+        "placeable": placeable
+    }
+
+def get_placeable_scenery_defs():
+    return [
+        def_id
+        for def_id, info in ALL_SCENERY_DEFS.items()
+        if info.get("placeable", False)
+    ]
+
+##############################################################################
+# SCENERYOBJECT
+##############################################################################
+class SceneryObject:
+    def __init__(self, x, y, definition_id):
+        """
+        A simpler constructor that directly uses a definition ID.
+        We'll look up ascii_char and color_name from ALL_SCENERY_DEFS if desired.
+        """
+        self.x = x
+        self.y = y
+        self.definition_id = definition_id
+
+        # Default char + color
+        self.char = "?"
+        self.color_pair = "white_on_black"
+
+        # Lookup in ALL_SCENERY_DEFS
+        info = ALL_SCENERY_DEFS.get(definition_id, {})
+        self.char = info.get("ascii_char", "?")
+        self.color_pair = info.get("color_name", "white_on_black")
+
+##############################################################################
+# LAYER-BASED DICTIONARY & HELPER FUNCTIONS
+##############################################################################
+def ensure_layered_format(placed_scenery):
+    if not placed_scenery:
+        return placed_scenery
+
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        return placed_scenery
+
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER: None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER: [],
+            ENTITIES_LAYER: [],
+            '_prev_floor': None
+        }
+        for obj in obj_list:
+            which_layer = layer_for_def_id(obj.definition_id)
+            if which_layer == FLOOR_LAYER:
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[which_layer].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+def _init_tile_layers(placed_scenery, x, y):
+    if (x, y) not in placed_scenery:
+        placed_scenery[(x, y)] = {
+            FLOOR_LAYER:   None,
+            OBJECTS_LAYER: [],
+            ITEMS_LAYER:   [],
+            ENTITIES_LAYER: [],
+            '_prev_floor': None
+        }
+    else:
+        tile_layers = placed_scenery[(x, y)]
+        for key in [FLOOR_LAYER, OBJECTS_LAYER, ITEMS_LAYER, ENTITIES_LAYER, '_prev_floor']:
+            if key not in tile_layers:
+                if key in (FLOOR_LAYER, '_prev_floor'):
+                    tile_layers[key] = None
+                else:
+                    tile_layers[key] = []
+
+def append_scenery(placed_scenery, obj):
+    x, y = obj.x, obj.y
+    _init_tile_layers(placed_scenery, x, y)
+    tile_layers = placed_scenery[(x, y)]
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id:
+            tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
+        tile_layers[FLOOR_LAYER] = obj
+    else:
+        if tile_layers[FLOOR_LAYER] is None:
+            tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers[layer_name].append(obj)
+
+def remove_scenery(placed_scenery, obj):
+    x, y = obj.x, obj.y
+    if (x, y) not in placed_scenery:
+        return
+
+    tile_layers = placed_scenery[(x, y)]
+    if '_prev_floor' not in tile_layers:
+        tile_layers['_prev_floor'] = None
+
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] == obj:
+            if tile_layers['_prev_floor'] is not None:
+                tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
+                tile_layers['_prev_floor'] = None
+            else:
+                tile_layers[FLOOR_LAYER] = None
+    else:
+        if obj in tile_layers[layer_name]:
+            tile_layers[layer_name].remove(obj)
+
+    if (tile_layers[FLOOR_LAYER] is None and
+        not tile_layers[OBJECTS_LAYER] and
+        not tile_layers[ITEMS_LAYER] and
+        not tile_layers[ENTITIES_LAYER]):
+        tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers['_prev_floor'] = None
+
+def get_objects_at(placed_scenery, x, y):
+    if (x, y) not in placed_scenery:
+        return []
+    tile_layers = placed_scenery[(x, y)]
+    merged = []
+    if tile_layers[FLOOR_LAYER]:
+        merged.append(tile_layers[FLOOR_LAYER])
+    merged.extend(tile_layers[OBJECTS_LAYER])
+    merged.extend(tile_layers[ITEMS_LAYER])
+    merged.extend(tile_layers[ENTITIES_LAYER])
+    return merged
+
+##############################################################################
+# COLLISION & LOOKUP
+##############################################################################
+def is_blocked(x, y, placed_scenery):
+    merged_stack = get_objects_at(placed_scenery, x, y)
+    if not merged_stack:
+        return False
+    top_obj = merged_stack[-1]
+    info = ALL_SCENERY_DEFS.get(top_obj.definition_id, None)
+    return bool(info and info.get("blocking", False))
+
+def get_stacked_objs(x, y, placed_scenery):
+    return get_objects_at(placed_scenery, x, y)
+
+def get_topmost_obj(x, y, placed_scenery):
+    merged_stack = get_objects_at(placed_scenery, x, y)
+    return merged_stack[-1] if merged_stack else None
+
+def get_scenery_def_id_at(x, y, placed_scenery):
+    top = get_topmost_obj(x, y, placed_scenery)
+    return top.definition_id if top else None
+
+def get_scenery_color_at(x, y, placed_scenery):
+    top = get_topmost_obj(x, y, placed_scenery)
+    return top.color_pair if top else 0
+
+##############################################################################
+# TILE EFFECT LOGIC
+##############################################################################
+def apply_tile_effects(player, tile_def_id, placed_scenery,
+                       is_editor=False, world_width=100, world_height=60):
+    """
+    Example of how you could invoke special 'slide' effects or other triggers
+    based on tile definition ID.
+    """
+    if tile_def_id == PATH_ID:
+        old_x, old_y = player.x, player.y
+        player.move(player.last_move_direction, world_width, world_height, placed_scenery)
+        # If blocked, the move won't succeed, effectively ending the 'slide'.
+
+# NOTE: The repeated place_tree / place_bridge_across_river / etc.
+#       logic is now in scenery_placement_utils, so it's removed here.
+
+
+# FileName: scenery_objects_main.py
+# version: 2.1
+# Summary: Manages object-specific logic (Rocks, Trees, Bridges, etc.).
+#          Now imports placement functions from scenery_placement_utils
+# Tags: scenery, objects
+
+from scenery_defs import (
+    ROCK_ID, TREE_ID, TREE_TRUNK_ID, TREE_TOP_ID,
+    BRIDGE_ID, BRIDGE_END_ID, RIVER_ID, BRIDGE_TOOL_ID
+)
+from scenery_core import (
+    get_objects_at,  # If you still need direct usage here
+    remove_scenery,
+    append_scenery
+)
+# Import the shared placement functions from the new file
+from scenery_placement_utils import (
+    place_scenery_item,
+    place_tree,
+    place_bridge_across_river
+)
+
+# If you have any other object-specific logic, you can place it here.
+# For instance, code that checks item usage or special object collisions.
+# But the actual "place_*" methods are now in scenery_placement_utils.
+
+# (No duplication here anymore!)
+
+
+
+# FileName: items_main.py
+# version: 1.0
+# Summary: Manages item definitions, handling creation, inventory, usage effects, or item-based interactions.
+# Tags: items, gameplay, inventory
+
+
+##############################################################################
+# 1) Item Registry
+##############################################################################
+
+ALL_ITEMS = {
+    "BasicSword": {
+        "slot": "weapon",
+        "bonus_stats": {"attack": 2}
+    },
+    "HealingPotion": {
+        "consumable": True,
+        "use_func": "heal_20hp"
+    },
+    "IronArmor": {
+        "slot": "armor",
+        "bonus_stats": {"defense": 3}
+    },
+    # Add more items as needed
+}
+
+##############################################################################
+# 2) ItemInstance class
+##############################################################################
+
+class ItemInstance:
+    """
+    Represents one "instance" of an item in a player's inventory.
+    - definition_id => key in ALL_ITEMS
+    - instance_data => dict for overrides (e.g. custom name, color, etc.)
+
+    Example usage:
+        sword = ItemInstance("BasicSword", {"custom_name": "Sword of Fire", "attack_bonus": 5})
+    """
+    def __init__(self, definition_id, instance_data=None):
+        self.definition_id = definition_id
+        if instance_data is None:
+            instance_data = {}
+        self.instance_data = instance_data  # Could store durability, enchantments, etc.
+
+    @property
+    def base_def(self):
+        """
+        Returns the base item definition from ALL_ITEMS.
+        e.g. base_def["slot"], base_def["consumable"], etc.
+        """
+        return ALL_ITEMS.get(self.definition_id, {})
+
+    def get_slot(self):
+        """
+        Returns the equip slot if any. e.g. "weapon", "armor", or None
+        """
+        return self.base_def.get("slot")
+
+    def is_consumable(self):
+        """
+        Returns True if item is consumable, else False
+        """
+        return self.base_def.get("consumable", False)
+
+    def get_bonus_stats(self):
+        """
+        Combine base_def's bonus_stats with any instance overrides.
+        e.g. base bonus_stats => {"attack":2}, instance_data => {"attack_bonus":5}
+        """
+        base = self.base_def.get("bonus_stats", {})
+        # Merge with instance_data keys if relevant
+        # For example, instance_data might store extra bonus points
+        combined = dict(base)  # shallow copy
+        # If we have "attack_bonus" in instance_data, add it to combined
+        if "attack_bonus" in self.instance_data:
+            combined["attack"] = combined.get("attack", 0) + self.instance_data["attack_bonus"]
+        return combined
+
+    def __repr__(self):
+        return f"<ItemInstance({self.definition_id}, data={self.instance_data})>"
+
+
+
+Error reading file: [Errno 2] No such file or directory: '/storage/emulated/0/Documents/Pydroid3/Termux_Directory/retroRPG/retroRPG_current/scenery_entities_main.py,'
+
+
+
+# FileName: scenery_core.py
+# version: 4.1
+# Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
+# Tags: scenery, core
+
+# If you still have these constants somewhere, or replaced them with your new system, adjust accordingly:
+from layer_defs import (
+    FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER,  # If you need them
+    # e.g., ITEMS_LAYER if you have one
+    layer_for_def_id
+)
+# Import your unified definitions from scenery_defs or scenery_manager
+from scenery_defs import ALL_SCENERY_DEFS
+
+EMPTY_FLOOR_ID = "EmptyFloor"  # so we can default to a blank floor tile if needed
+
+class SceneryObject:
+    def __init__(self, x, y, definition_id):
+        """
+        A simpler constructor that directly uses a definition ID, without the
+        old forward/reverse maps. We can still store 'char' and 'color_pair'
+        from ALL_SCENERY_DEFS if desired.
+        """
+        self.x = x
+        self.y = y
+        self.definition_id = definition_id
+        self.char = "?"
+        self.color_pair = "white_on_black"
+
+        # Optionally, if you want to read default ASCII/ color from ALL_SCENERY_DEFS:
+        info = ALL_SCENERY_DEFS.get(definition_id, {})
+        self.char = info.get("ascii_char", "?")
+        self.color_pair = info.get("color_name", "white_on_black")
+
+
+def ensure_layered_format(placed_scenery):
+    """
+    Convert any old list-of-objects format => dict-of-layers format if needed.
+    """
+    if not placed_scenery:
+        return placed_scenery
+
+    first_key = next(iter(placed_scenery))
+    first_val = placed_scenery[first_key]
+
+    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
+        # Already layered
+        return placed_scenery
+
+    new_dict = {}
+    for (x, y), obj_list in placed_scenery.items():
+        tile_dict = {
+            FLOOR_LAYER:    None,
+            OBJECTS_LAYER:  [],
+            # If you have an ITEMS_LAYER, add it here too
+            ENTITIES_LAYER: [],
+            '_prev_floor':  None
+        }
+        for obj in obj_list:
+            which_layer = layer_for_def_id(obj.definition_id)
+            if which_layer == FLOOR_LAYER:
+                tile_dict[FLOOR_LAYER] = obj
+            else:
+                tile_dict[which_layer].append(obj)
+        new_dict[(x, y)] = tile_dict
+
+    return new_dict
+
+def _init_tile_layers(placed_scenery, x, y):
+    """
+    Ensure placed_scenery[(x,y)] has the required layer structure.
+    """
+    if (x, y) not in placed_scenery:
+        placed_scenery[(x, y)] = {
+            FLOOR_LAYER:    None,
+            OBJECTS_LAYER:  [],
+            ENTITIES_LAYER: [],
+            '_prev_floor':  None
+        }
+        # If you have an ITEMS_LAYER, add it here
+        # e.g. "items": []
+    else:
+        tile_layers = placed_scenery[(x, y)]
+        for key in [FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER, '_prev_floor']:
+            if key not in tile_layers:
+                tile_layers[key] = None if key in (FLOOR_LAYER, '_prev_floor') else []
+
+def append_scenery(placed_scenery, obj):
+    """
+    Place a new object into the correct layer for its definition.
+    """
+    x, y = obj.x, obj.y
+    _init_tile_layers(placed_scenery, x, y)
+    tile_layers = placed_scenery[(x, y)]
+
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if (tile_layers[FLOOR_LAYER]
+            and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id):
+            # push current floor into _prev_floor
+            tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
+        tile_layers[FLOOR_LAYER] = obj
+    else:
+        # Ensure floor isn't None
+        if tile_layers[FLOOR_LAYER] is None:
+            tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers[layer_name].append(obj)
+
+def remove_scenery(placed_scenery, obj):
+    """
+    Remove a SceneryObject from its tile. If it's the floor, restore _prev_floor if available.
+    If tile becomes fully empty, revert to EMPTY_FLOOR.
+    """
+    x, y = obj.x, obj.y
+    if (x, y) not in placed_scenery:
+        return
+
+    tile_layers = placed_scenery[(x, y)]
+    layer_name = layer_for_def_id(obj.definition_id)
+
+    if layer_name == FLOOR_LAYER:
+        if tile_layers[FLOOR_LAYER] == obj:
+            if tile_layers['_prev_floor'] is not None:
+                tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
+                tile_layers['_prev_floor'] = None
+            else:
+                tile_layers[FLOOR_LAYER] = None
+    else:
+        if obj in tile_layers[layer_name]:
+            tile_layers[layer_name].remove(obj)
+
+    # If it is now completely empty, revert to an EMPTY_FLOOR
+    if (tile_layers[FLOOR_LAYER] is None
+        and not tile_layers[OBJECTS_LAYER]
+        and not tile_layers[ENTITIES_LAYER]):
+        tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_layers['_prev_floor'] = None
+
+def get_objects_at(placed_scenery, x, y):
+    """
+    Return all objects in this tile, from floor to top.
+    """
+    if (x, y) not in placed_scenery:
+        return []
+    tile = placed_scenery[(x, y)]
+    merged = []
+    if tile[FLOOR_LAYER]:
+        merged.append(tile[FLOOR_LAYER])
+    merged.extend(tile[OBJECTS_LAYER])
+    merged.extend(tile[ENTITIES_LAYER])
+    # if you have an ITEMS_LAYER, merge it too
+    return merged
+
+def get_topmost_obj(placed_scenery, x, y):
+    stack = get_objects_at(placed_scenery, x, y)
+    return stack[-1] if stack else None
+
+def get_scenery_def_id_at(x, y, placed_scenery):
+    top = get_topmost_obj(placed_scenery, x, y)
+    return top.definition_id if top else None
+
+def get_scenery_color_at(x, y, placed_scenery):
+    top = get_topmost_obj(placed_scenery, x, y)
+    return getattr(top, "color_pair", "white_on_black") if top else "white_on_black"
+
+def is_blocked(x, y, placed_scenery):
+    """
+    If there's nothing here, it's not blocked. Otherwise, check the top object's 'blocking' property.
+    """
+    stack = get_objects_at(placed_scenery, x, y)
+    if not stack:
+        return False
+    top_obj = stack[-1]
+    info = ALL_SCENERY_DEFS.get(top_obj.definition_id, {})
+    return bool(info.get("blocking", False))
+
