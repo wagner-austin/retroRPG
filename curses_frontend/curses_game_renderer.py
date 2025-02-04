@@ -16,7 +16,7 @@ from .where_curses_themes_lives import CURRENT_THEME
 # We import the quick-save and yes/no logic from the curses scene:
 from .curses_scene_save import perform_quick_save
 
-# The tile-drawing logic is in curses_tile_render.py
+# The tile-drawing logic is in curses_tile_drawing.py
 from .curses_tile_drawing import draw_single_tile, draw_player_on_top
 
 # Import the inventory summary drawer

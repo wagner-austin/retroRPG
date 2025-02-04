@@ -1,23 +1,23 @@
 # FileName: generator.py
-# version: 2.4
+# version: 2.5 (updated for multi-layer definitions, no local constants)
 # Summary: Coordinates the procedural generation workflow, calling sub-generators 
 #          (rivers, grass, trees, rocks, etc.) in order.
 # Tags: map, generation, pipeline
 
-import random
 import debug
 
 # -------------------------------------------------------------------------
-# 1) SINGLE SOURCE OF TRUTH FOR DEFINITION ID CONSTANTS
+# 1) Removed local definition constants; we rely on actual strings
+#    (e.g. "River", "Grass", "EmptyFloor") that match tile keys in scenery_manager.py.
 # -------------------------------------------------------------------------
-RIVER_ID            = "River"
-GRASS_ID            = "Grass"
-SEMICOLON_FLOOR_ID  = "SemicolonFloor"
-EMPTY_FLOOR_ID      = "EmptyFloor"
-DEBUG_DOT_ID        = "DebugDot"
-TREE_TRUNK_ID       = "TreeTrunk"
-TREE_TOP_ID         = "TreeTop"
-ROCK_ID             = "Rock"
+# RIVER_ID            = "River"
+# GRASS_ID            = "Grass"
+# SEMICOLON_FLOOR_ID  = "SemicolonFloor"
+# EMPTY_FLOOR_ID      = "EmptyFloor"
+# DEBUG_DOT_ID        = "DebugDot"
+# TREE_TRUNK_ID       = "TreeTrunk"
+# TREE_TOP_ID         = "TreeTop"
+# ROCK_ID             = "Rock"
 
 # -------------------------------------------------------------------------
 # 2) FEATURE TOGGLES
@@ -29,15 +29,16 @@ ENABLE_ROCKS  = False
 
 # -------------------------------------------------------------------------
 # 3) UTILITY IMPORTS
-#     - We import 'compute_distance_map_bfs' from gen_utils at top level,
-#       since it should not import anything from generator.py, avoiding cycles.
 # -------------------------------------------------------------------------
 from .gen_utils import compute_distance_map_bfs
 
 # -------------------------------------------------------------------------
-# 4) MAIN GENERATION FUNCTION
-#     - We do a LAZY import of sub-generators inside the function to avoid
-#       circular references, so they can import our constants.
+# 4) Import ALL_SCENERY_DEFS from scenery_manager for ID validation
+# -------------------------------------------------------------------------
+from scenery_data.scenery_manager import ALL_SCENERY_DEFS
+
+# -------------------------------------------------------------------------
+# 5) MAIN GENERATION FUNCTION
 # -------------------------------------------------------------------------
 def generate_procedural_map(width=100, height=100):
     """
@@ -47,7 +48,6 @@ def generate_procedural_map(width=100, height=100):
     Feature toggles:
         ENABLE_RIVERS, ENABLE_GRASS, ENABLE_TREES, ENABLE_ROCKS
     """
-
     # Avoid circular imports by importing sub-generators here:
     from .gen_rivers import spawn_rivers
     from .gen_grass import spawn_large_semicircle_grass
@@ -57,11 +57,11 @@ def generate_procedural_map(width=100, height=100):
     # 1) Initialize a 2D grid of None => blank
     grid = [[None for _ in range(width)] for _ in range(height)]
 
-    # 2) Rivers => sets some tiles to RIVER_ID
+    # 2) Rivers => sets some tiles to "River"
     if ENABLE_RIVERS:
         spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2)
 
-    # 3) Grass => sets some tiles to GRASS_ID
+    # 3) Grass => sets some tiles to "Grass"
     if ENABLE_GRASS:
         spawn_large_semicircle_grass(
             grid,
@@ -71,17 +71,17 @@ def generate_procedural_map(width=100, height=100):
             patch_size=60
         )
 
-    # Identify Grass tiles => BFS starting points
+    # Identify "Grass" tiles => BFS starting points
     grass_starts = []
     for y in range(height):
         for x in range(width):
-            if grid[y][x] == GRASS_ID:
+            if grid[y][x] == "Grass":
                 grass_starts.append((x, y))
 
-    # 4) Fill blank tiles (None) with SEMICOLON_FLOOR_ID or EMPTY_FLOOR_ID,
+    # 4) Fill blank tiles (None) with "SemicolonFloor" or "EmptyFloor",
     #    depending on distance from grass.
     def passable_func(x, y):
-        return True  # no blocking for BFS fill
+        return True  # BFS can pass all squares
 
     distance_map = compute_distance_map_bfs(width, height, grass_starts, passable_func)
 
@@ -89,18 +89,18 @@ def generate_procedural_map(width=100, height=100):
         for x in range(width):
             if grid[y][x] is None:
                 dist = distance_map[y][x]
-                # near grass => semicolon floor
+                # near grass => "SemicolonFloor"
                 if dist <= 5:
-                    grid[y][x] = SEMICOLON_FLOOR_ID
+                    grid[y][x] = "SemicolonFloor"
                 else:
-                    grid[y][x] = EMPTY_FLOOR_ID
+                    grid[y][x] = "EmptyFloor"
 
-    # Debug => turn empty floors into debug dots
+    # Debug => turn "EmptyFloor" into "DebugDot" if debugging is on
     if debug.DEBUG_CONFIG["enabled"]:
         for y in range(height):
             for x in range(width):
-                if grid[y][x] == EMPTY_FLOOR_ID:
-                    grid[y][x] = DEBUG_DOT_ID
+                if grid[y][x] == "EmptyFloor":
+                    grid[y][x] = "DebugDot"
 
     # 5) Optionally spawn trees in non-grass areas
     if ENABLE_TREES:
@@ -110,11 +110,15 @@ def generate_procedural_map(width=100, height=100):
     if ENABLE_ROCKS:
         spawn_rocks(grid, width, height, rock_min=10, rock_max=20)
 
-    # Convert grid => scenery list
+    # 7) Convert grid => a list of {"x", "y", "definition_id"} for each tile
+    #    and ensure each def_id is recognized by ALL_SCENERY_DEFS. 
+    #    If not, fallback to "EmptyFloor".
     scenery_list = []
     for y in range(height):
         for x in range(width):
             def_id = grid[y][x]
+            if def_id not in ALL_SCENERY_DEFS:
+                def_id = "EmptyFloor"
             scenery_list.append({
                 "x": x,
                 "y": y,
@@ -126,3 +130,7 @@ def generate_procedural_map(width=100, height=100):
         "world_height": height,
         "scenery": scenery_list
     }
+
+    # ---------------------------------------------------------------------
+    # END of generate_procedural_map
+    # ---------------------------------------------------------------------

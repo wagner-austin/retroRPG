@@ -1,33 +1,27 @@
 # FileName: scenery_core.py
-# version: 4.1
+# version: 4.3
 # Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
 # Tags: scenery, core
 
-# If you still have these constants somewhere, or replaced them with your new system, adjust accordingly:
-from layer_defs import (
-    FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER,  # If you need them
-    # e.g., ITEMS_LAYER if you have one
-    layer_for_def_id
-)
-# Import your unified definitions from scenery_defs or scenery_manager
-from scenery_defs import ALL_SCENERY_DEFS
+from scenery_data.scenery_manager import ALL_SCENERY_DEFS, layer_for_def_id
 
-EMPTY_FLOOR_ID = "EmptyFloor"  # so we can default to a blank floor tile if needed
+# Uncommented / re-enabled so that fallback floors can be placed correctly.
+EMPTY_FLOOR_ID = "EmptyFloor"  # used as a fallback if a tile has no floor
 
 class SceneryObject:
     def __init__(self, x, y, definition_id):
         """
-        A simpler constructor that directly uses a definition ID, without the
-        old forward/reverse maps. We can still store 'char' and 'color_pair'
-        from ALL_SCENERY_DEFS if desired.
+        A simpler constructor that directly uses a definition ID.
+        We can store 'char' and 'color_pair' from ALL_SCENERY_DEFS if desired.
         """
         self.x = x
         self.y = y
         self.definition_id = definition_id
+
         self.char = "?"
         self.color_pair = "white_on_black"
 
-        # Optionally, if you want to read default ASCII/ color from ALL_SCENERY_DEFS:
+        # Look up default ASCII/color in ALL_SCENERY_DEFS
         info = ALL_SCENERY_DEFS.get(definition_id, {})
         self.char = info.get("ascii_char", "?")
         self.color_pair = info.get("color_name", "white_on_black")
@@ -36,141 +30,190 @@ class SceneryObject:
 def ensure_layered_format(placed_scenery):
     """
     Convert any old list-of-objects format => dict-of-layers format if needed.
+
+    Old format: placed_scenery[(x, y)] = [obj1, obj2, ...]
+    New format: placed_scenery[(x, y)] = {
+        "floor": None or SceneryObject,
+        "_prev_floor": None or SceneryObject,
+        "objects": [SceneryObject, ...],
+        "items": [...],
+        "entities": [...],
+        # etc.
+    }
     """
     if not placed_scenery:
         return placed_scenery
 
+    # Peek at one tile's value to see if it's already in the dict-of-layers format.
     first_key = next(iter(placed_scenery))
     first_val = placed_scenery[first_key]
-
-    if isinstance(first_val, dict) and FLOOR_LAYER in first_val:
-        # Already layered
+    # If it's a dict and has a "floor" key, we'll consider it "layered."
+    if isinstance(first_val, dict) and "floor" in first_val:
         return placed_scenery
 
+    # Otherwise, convert it:
     new_dict = {}
     for (x, y), obj_list in placed_scenery.items():
         tile_dict = {
-            FLOOR_LAYER:    None,
-            OBJECTS_LAYER:  [],
-            # If you have an ITEMS_LAYER, add it here too
-            ENTITIES_LAYER: [],
-            '_prev_floor':  None
+            "floor": None,
+            "_prev_floor": None
         }
+        # We iterate over the old objects and place each one by its layer
         for obj in obj_list:
-            which_layer = layer_for_def_id(obj.definition_id)
-            if which_layer == FLOOR_LAYER:
-                tile_dict[FLOOR_LAYER] = obj
+            layer_name = layer_for_def_id(obj.definition_id)
+            if layer_name == "floor":
+                # If we already have a floor, push it into _prev_floor
+                if tile_dict["floor"] is not None:
+                    tile_dict["_prev_floor"] = tile_dict["floor"]
+                tile_dict["floor"] = obj
             else:
-                tile_dict[which_layer].append(obj)
+                if layer_name not in tile_dict:
+                    tile_dict[layer_name] = []
+                tile_dict[layer_name].append(obj)
         new_dict[(x, y)] = tile_dict
 
     return new_dict
 
+
 def _init_tile_layers(placed_scenery, x, y):
     """
-    Ensure placed_scenery[(x,y)] has the required layer structure.
+    Ensure placed_scenery[(x,y)] has at least a "floor" and "_prev_floor".
+    Other layers will be created as needed when we place objects/items/entities.
     """
     if (x, y) not in placed_scenery:
         placed_scenery[(x, y)] = {
-            FLOOR_LAYER:    None,
-            OBJECTS_LAYER:  [],
-            ENTITIES_LAYER: [],
-            '_prev_floor':  None
+            "floor": None,
+            "_prev_floor": None
         }
-        # If you have an ITEMS_LAYER, add it here
-        # e.g. "items": []
     else:
-        tile_layers = placed_scenery[(x, y)]
-        for key in [FLOOR_LAYER, OBJECTS_LAYER, ENTITIES_LAYER, '_prev_floor']:
-            if key not in tile_layers:
-                tile_layers[key] = None if key in (FLOOR_LAYER, '_prev_floor') else []
+        tile_dict = placed_scenery[(x, y)]
+        if "floor" not in tile_dict:
+            tile_dict["floor"] = None
+        if "_prev_floor" not in tile_dict:
+            tile_dict["_prev_floor"] = None
+
 
 def append_scenery(placed_scenery, obj):
     """
     Place a new object into the correct layer for its definition.
+    If it's a floor tile, store exactly one. If that tile already had a different
+    floor, push it into _prev_floor.
     """
     x, y = obj.x, obj.y
     _init_tile_layers(placed_scenery, x, y)
-    tile_layers = placed_scenery[(x, y)]
+    tile_dict = placed_scenery[(x, y)]
 
     layer_name = layer_for_def_id(obj.definition_id)
 
-    if layer_name == FLOOR_LAYER:
-        if (tile_layers[FLOOR_LAYER]
-            and tile_layers[FLOOR_LAYER].definition_id != obj.definition_id):
-            # push current floor into _prev_floor
-            tile_layers['_prev_floor'] = tile_layers[FLOOR_LAYER]
-        tile_layers[FLOOR_LAYER] = obj
+    if layer_name == "floor":
+        # If there's already a floor different from this new one,
+        # store it in _prev_floor first.
+        if tile_dict["floor"] and tile_dict["floor"].definition_id != obj.definition_id:
+            tile_dict["_prev_floor"] = tile_dict["floor"]
+        tile_dict["floor"] = obj
     else:
-        # Ensure floor isn't None
-        if tile_layers[FLOOR_LAYER] is None:
-            tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
-        tile_layers[layer_name].append(obj)
+        # Ensure we have a floor (even if it's EmptyFloor) so the tile isn't blank
+        if tile_dict["floor"] is None:
+            tile_dict["floor"] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        # Ensure the layer is a list
+        if layer_name not in tile_dict:
+            tile_dict[layer_name] = []
+        tile_dict[layer_name].append(obj)
+
 
 def remove_scenery(placed_scenery, obj):
     """
-    Remove a SceneryObject from its tile. If it's the floor, restore _prev_floor if available.
-    If tile becomes fully empty, revert to EMPTY_FLOOR.
+    Remove a SceneryObject from its tile. If it's the floor, restore _prev_floor
+    if available. If the tile ends up totally empty, revert to an EMPTY_FLOOR tile.
     """
     x, y = obj.x, obj.y
     if (x, y) not in placed_scenery:
         return
 
-    tile_layers = placed_scenery[(x, y)]
+    tile_dict = placed_scenery[(x, y)]
     layer_name = layer_for_def_id(obj.definition_id)
 
-    if layer_name == FLOOR_LAYER:
-        if tile_layers[FLOOR_LAYER] == obj:
-            if tile_layers['_prev_floor'] is not None:
-                tile_layers[FLOOR_LAYER] = tile_layers['_prev_floor']
-                tile_layers['_prev_floor'] = None
+    if layer_name == "floor":
+        if tile_dict.get("floor") == obj:
+            if tile_dict.get("_prev_floor"):
+                tile_dict["floor"] = tile_dict["_prev_floor"]
+                tile_dict["_prev_floor"] = None
             else:
-                tile_layers[FLOOR_LAYER] = None
+                tile_dict["floor"] = None
     else:
-        if obj in tile_layers[layer_name]:
-            tile_layers[layer_name].remove(obj)
+        if layer_name in tile_dict and obj in tile_dict[layer_name]:
+            tile_dict[layer_name].remove(obj)
 
-    # If it is now completely empty, revert to an EMPTY_FLOOR
-    if (tile_layers[FLOOR_LAYER] is None
-        and not tile_layers[OBJECTS_LAYER]
-        and not tile_layers[ENTITIES_LAYER]):
-        tile_layers[FLOOR_LAYER] = SceneryObject(x, y, EMPTY_FLOOR_ID)
-        tile_layers['_prev_floor'] = None
+    # Check if the tile is now completely empty (no floor, no objects, etc.).
+    is_empty = (tile_dict["floor"] is None)
+    for k, v in tile_dict.items():
+        if k in ("floor", "_prev_floor"):
+            continue
+        if isinstance(v, list) and len(v) > 0:
+            is_empty = False
+            break
+
+    # If empty, revert to an EMPTY_FLOOR tile
+    if is_empty:
+        tile_dict["floor"] = SceneryObject(x, y, EMPTY_FLOOR_ID)
+        tile_dict["_prev_floor"] = None
+
 
 def get_objects_at(placed_scenery, x, y):
     """
-    Return all objects in this tile, from floor to top.
+    Return all objects in this tile, from the floor (bottom) up to the topmost layer.
     """
     if (x, y) not in placed_scenery:
         return []
-    tile = placed_scenery[(x, y)]
+
+    tile_dict = placed_scenery[(x, y)]
     merged = []
-    if tile[FLOOR_LAYER]:
-        merged.append(tile[FLOOR_LAYER])
-    merged.extend(tile[OBJECTS_LAYER])
-    merged.extend(tile[ENTITIES_LAYER])
-    # if you have an ITEMS_LAYER, merge it too
+
+    # Floor is always at the bottom
+    if tile_dict.get("floor"):
+        merged.append(tile_dict["floor"])
+
+    # Collect every other layer except '_prev_floor'
+    for layer_key, layer_value in tile_dict.items():
+        if layer_key in ("floor", "_prev_floor"):
+            continue
+        if isinstance(layer_value, list):
+            merged.extend(layer_value)
+
     return merged
 
+
 def get_topmost_obj(placed_scenery, x, y):
+    """
+    Return whichever SceneryObject is 'on top' (the last in the stacked layers).
+    """
     stack = get_objects_at(placed_scenery, x, y)
     return stack[-1] if stack else None
 
+
 def get_scenery_def_id_at(x, y, placed_scenery):
-    top = get_topmost_obj(placed_scenery, x, y)
-    return top.definition_id if top else None
+    """
+    Return the definition_id of the topmost object at (x, y).
+    """
+    top_obj = get_topmost_obj(placed_scenery, x, y)
+    return top_obj.definition_id if top_obj else None
+
 
 def get_scenery_color_at(x, y, placed_scenery):
-    top = get_topmost_obj(placed_scenery, x, y)
-    return getattr(top, "color_pair", "white_on_black") if top else "white_on_black"
+    """
+    Return the color_pair of the topmost object at (x, y).
+    """
+    top_obj = get_topmost_obj(placed_scenery, x, y)
+    return top_obj.color_pair if top_obj else "white_on_black"
+
 
 def is_blocked(x, y, placed_scenery):
     """
-    If there's nothing here, it's not blocked. Otherwise, check the top object's 'blocking' property.
+    If there's nothing here, it's not blocked. Otherwise, check the top object's
+    'blocking' field in ALL_SCENERY_DEFS.
     """
-    stack = get_objects_at(placed_scenery, x, y)
-    if not stack:
+    top_obj = get_topmost_obj(placed_scenery, x, y)
+    if not top_obj:
         return False
-    top_obj = stack[-1]
-    info = ALL_SCENERY_DEFS.get(top_obj.definition_id, {})
-    return bool(info.get("blocking", False))
+    tile_info = ALL_SCENERY_DEFS.get(top_obj.definition_id, {})
+    return bool(tile_info.get("blocking", False))

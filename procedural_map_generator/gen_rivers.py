@@ -1,17 +1,19 @@
 # FileName: gen_rivers.py
-# version: 1.1
-# Summary: Spawns river tiles by setting them to RIVER_ID
+# version: 1.2 (no longer uses generator.py constants)
+# Summary: Spawns river tiles by setting them to "River"
 # Tags: map, generation, rivers
 
 import random
 
-# Import definition IDs from generator.py
-from .generator import RIVER_ID
+# OLD IMPORT (commented out):
+# from .generator import RIVER_ID
+#
+# We replace with literal string "River".
 
 def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
     """
     Spawns a certain number of rivers (default 1-2). Each river starts on one
-    edge, ends on the opposite edge, etc., storing RIVER_ID in the grid.
+    edge, ends on the opposite edge, etc., storing "River" in the grid.
     """
     river_count = random.randint(min_rivers, max_rivers)
     for _ in range(river_count):
@@ -20,6 +22,9 @@ def spawn_rivers(grid, width, height, min_rivers=1, max_rivers=2):
         fill_river_alternate_widths(grid, path, width, height)
 
 def pick_opposite_edges(width, height):
+    """
+    Pick two points on opposite edges of the map.
+    """
     edge_type = random.randint(0, 3)
     if edge_type == 0:
         # top -> bottom
@@ -49,13 +54,16 @@ def pick_opposite_edges(width, height):
     return (sx, sy), (ex, ey)
 
 def trace_river_path_improved(start, end, width, height):
+    """
+    Creates a path from start to end, sometimes going diagonally or
+    weaving around. Returns a list of (x, y) coordinates.
+    """
     (sx, sy) = start
     (ex, ey) = end
     path = []
     curx, cury = sx, sy
     path.append((curx, cury))
 
-    import math
     max_steps = (abs(ex - sx) + abs(ey - sy)) * 3
 
     for _ in range(max_steps):
@@ -111,7 +119,7 @@ def trace_river_path_improved(start, end, width, height):
 def fill_river_alternate_widths(grid, path, width, height):
     """
     For each index i in the path:
-      if i is even => fill the tile + radius around it with RIVER_ID
+      if i is even => fill the tile + radius around it with "River"
       if i is odd  => fill just the center tile
     """
     wide_offsets = [
@@ -126,7 +134,8 @@ def fill_river_alternate_widths(grid, path, width, height):
                 nx = x + ox
                 ny = y + oy
                 if 0 <= nx < width and 0 <= ny < height:
-                    grid[ny][nx] = RIVER_ID
+                    # grid[ny][nx] = RIVER_ID
+                    grid[ny][nx] = "River"
         else:
             # 1-wide
-            grid[y][x] = RIVER_ID
+            grid[y][x] = "River"
