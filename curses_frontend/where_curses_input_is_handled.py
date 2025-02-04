@@ -40,25 +40,25 @@ class CursesGameInput(IGameInput):
             return "QUIT"
 
         # Movement
-        if key in (ord('w'), curses.KEY_UP):
+        if key in (ord('w'), ord('W'), curses.KEY_UP):
             return "MOVE_UP"
-        if key in (ord('s'), curses.KEY_DOWN):
+        if key in (ord('s'), ord ('S'), curses.KEY_DOWN):
             return "MOVE_DOWN"
-        if key in (ord('a'), curses.KEY_LEFT):
+        if key in (ord('a'), ord ('A'), curses.KEY_LEFT):
             return "MOVE_LEFT"
-        if key in (ord('d'), curses.KEY_RIGHT):
+        if key in (ord('d'), ord('D'), curses.KEY_RIGHT):
             return "MOVE_RIGHT"
 
         # Editor toggle
-        if key == ord('e'):
+        if key in (ord('e'), ord('E')):
             return "EDITOR_TOGGLE"
 
         # Quick-save
-        if key == ord('o'):
+        if key in (ord('o'), ord('O')):
             return "SAVE_QUICK"
 
         # Debug
-        if key == ord('v'):
+        if key in (ord('v'), ord('V')):
             return "DEBUG_TOGGLE"
 
         # Interact
@@ -66,15 +66,15 @@ class CursesGameInput(IGameInput):
             return "INTERACT"
 
         # Editor keys
-        if key == ord('p'):
+        if key in (ord('p'), ord('P')):
             return "PLACE_ITEM"
-        if key == ord('x'):
+        if key in (ord('x'), ord ('X')):
             return "REMOVE_TOP"
-        if key == ord('u'):
+        if key in (ord('u'), ord('U')):
             return "UNDO"
-        if key == ord('l'):
+        if key in (ord('l'), ord('L')):
             return "NEXT_ITEM"
-        if key == ord('k'):
+        if key in (ord('k'), ord('K')):
             return "PREV_ITEM"
 
         # Show Inventory (new)
