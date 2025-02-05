@@ -13,7 +13,7 @@ import json
 from map_io_storage import parse_map_dict
 from player_char import Player
 from player_char_io import load_player
-from scenery_core import SceneryObject, ensure_layered_format
+from scenery_data.scenery_core import SceneryObject, ensure_layered_format
 from model_main import GameModel, GameContext
 
 def build_model_common(filename_or_data, is_generated, mode_name):

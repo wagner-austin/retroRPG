@@ -1,9 +1,9 @@
 # FileName: engine_respawn.py
 # version: 1.2
 # Summary: Tracks and respawns resources (trees, rocks) after a set countdown.
-# Tags: engine, respawn, resources
+# Tags: engine, respawn, resources, scenery
 
-from scenery_core import SceneryObject, append_scenery
+from scenery_data.scenery_core import SceneryObject, append_scenery
 
 def handle_respawns(model, mark_dirty_func):
     """

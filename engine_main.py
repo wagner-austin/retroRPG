@@ -15,8 +15,8 @@ from engine_respawn import handle_respawns
 from engine_actionflash import update_action_flash
 from engine_npc import update_npcs
 from engine_network import handle_network
-from scenery_placement import  apply_tile_effects
-from scenery_core import get_scenery_def_id_at
+from scenery_data.scenery_placement import  apply_tile_effects
+from scenery_data.scenery_core import get_scenery_def_id_at
 
 def run_game_loop(model, context, game_input, game_renderer):
     """

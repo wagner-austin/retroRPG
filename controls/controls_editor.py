@@ -6,8 +6,8 @@
 #
 # Tags: controls, input, editor
 
-from scenery_core import get_objects_at, remove_scenery, append_scenery
-from scenery_placement_utils import place_scenery_item
+from scenery_data.scenery_core import get_objects_at, remove_scenery, append_scenery
+from scenery_data.scenery_placement_utils import place_scenery_item
 
 def handle_editor_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
     """

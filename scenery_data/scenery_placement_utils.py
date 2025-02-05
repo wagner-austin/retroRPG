@@ -5,7 +5,7 @@
 
 #from scenery_data.scenery_manager import ALL_SCENERY_DEFS  # if you want to reference tile data
 
-from scenery_core import (
+from scenery_data.scenery_core import (
     SceneryObject,
     get_objects_at,
     remove_scenery,
