@@ -85,7 +85,7 @@ def home_scene_ui(stdscr):
             elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
                 if current_select_slot < len(selectable_indices) - 1:
                     current_select_slot += 1
-            elif key in (curses.KEY_ENTER, 10, 13):
+            elif key in (curses.KEY_ENTER, 10, 13, 32):
                 # user pressed Enter on the current slot
                 if current_select_slot == 0:
                     return 1  # Play
@@ -101,7 +101,7 @@ def home_scene_ui(stdscr):
                 return 3  # Settings
             elif key in (ord('q'), ord('Q'), 27):
                 return 2  # user pressed Esc => Quit
-            elif key == ord('v'):
+            elif key in (ord('v'), ord ('V')):
                 debug.toggle_debug()
 
         frame_count += 1

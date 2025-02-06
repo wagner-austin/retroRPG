@@ -93,7 +93,7 @@ def _select_map_file_load_mode(stdscr, files):
             selected_index = max(0, selected_index - 1)
         elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
             selected_index = min(len(files) - 1, selected_index + 1)
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key in (curses.KEY_ENTER, 10, 13, 32):
             # Enter = pick
             if selected_index == 0:
                 return "GENERATE"
