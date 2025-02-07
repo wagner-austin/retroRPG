@@ -4,7 +4,7 @@
 # Tags: items, inventory
 
 # Make sure to replace 'items_main' with whatever file actually contains ALL_ITEMS.
-from scenery_data.scenery_manager import ALL_SCENERY_DEFS
+from scenery.scenery_manager import ALL_SCENERY_DEFS
 
 class ItemInstance:
     """

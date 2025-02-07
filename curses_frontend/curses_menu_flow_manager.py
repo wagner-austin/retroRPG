@@ -29,8 +29,8 @@ from .curses_scene_transition import run_transition
 # Import dedicated save logic
 from .curses_scene_save import handle_post_game_scene_save
 
-from map_model_builder import build_model_common
-from procedural_map_generator.map_generator_pipeline import create_procedural_model
+from map_system.map_model_builder import build_model_common
+from map_system.mapgen.map_generator_pipeline import create_procedural_model
 
 # Import the renderer for scenes
 from .curses_game_renderer import CursesGameRenderer
@@ -118,7 +118,6 @@ class MenuFlowManager:
                     continue
 
                 if isinstance(selection, dict):
-                    time.sleep(10)  # Legacy debug pause.
                     model, context = build_model_common(selection, is_generated=True, mode_name="play")
                     if not model:
                         self.current_state = "HOME"

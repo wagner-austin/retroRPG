@@ -7,19 +7,6 @@
 import debug
 
 # -------------------------------------------------------------------------
-# 1) Removed local definition constants; we rely on actual strings
-#    (e.g. "River", "Grass", "EmptyFloor") that match tile keys in scenery_manager.py.
-# -------------------------------------------------------------------------
-# RIVER_ID            = "River"
-# GRASS_ID            = "Grass"
-# SEMICOLON_FLOOR_ID  = "SemicolonFloor"
-# EMPTY_FLOOR_ID      = "EmptyFloor"
-# DEBUG_DOT_ID        = "DebugDot"
-# TREE_TRUNK_ID       = "TreeTrunk"
-# TREE_TOP_ID         = "TreeTop"
-# ROCK_ID             = "Rock"
-
-# -------------------------------------------------------------------------
 # 2) FEATURE TOGGLES
 # -------------------------------------------------------------------------
 ENABLE_RIVERS = True
@@ -35,7 +22,7 @@ from .gen_utils import compute_distance_map_bfs
 # -------------------------------------------------------------------------
 # 4) Import ALL_SCENERY_DEFS from scenery_manager for ID validation
 # -------------------------------------------------------------------------
-from scenery_data.scenery_manager import ALL_SCENERY_DEFS
+from scenery.scenery_manager import ALL_SCENERY_DEFS
 
 # -------------------------------------------------------------------------
 # 5) MAIN GENERATION FUNCTION

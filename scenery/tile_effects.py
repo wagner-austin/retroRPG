@@ -1,4 +1,4 @@
-# FileName: scenery_tile_effects.py
+# FileName: tile_effects.py
 # version 1.0
 
 # Summary: Manages tile effects.

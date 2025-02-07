@@ -4,7 +4,7 @@
 # Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
 # Tags: scenery, core
 
-from scenery_data.scenery_manager import ALL_SCENERY_DEFS, layer_for_def_id
+from scenery.scenery_manager import ALL_SCENERY_DEFS, layer_for_def_id
 
 # Uncommented / re-enabled so that fallback floors can be placed correctly.
 EMPTY_FLOOR_ID = "EmptyFloor"  # used as a fallback if a tile has no floor

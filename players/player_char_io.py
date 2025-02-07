@@ -14,8 +14,8 @@ whenever we save.
 import os
 import json
 
-from player_inventory import ItemInstance
-from player_char import Player
+from players.player_inventory import ItemInstance
+from players.player_char import Player
 
 CHARACTER_FOLDER = "character"
 CHARACTER_FILE = os.path.join(CHARACTER_FOLDER, "character_data.json")

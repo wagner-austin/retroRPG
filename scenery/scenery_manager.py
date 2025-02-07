@@ -7,10 +7,10 @@
 # Tags: scenery, manager
 
 # Import each partial dictionary:
-from scenery_data.floor_tiles import FLOOR_TILES
-from scenery_data.object_tiles import OBJECT_TILES
-from scenery_data.item_tiles import ITEM_TILES
-from scenery_data.entity_tiles import ENTITY_TILES
+from scenery.floor_tiles import FLOOR_TILES
+from scenery.object_tiles import OBJECT_TILES
+from scenery.item_tiles import ITEM_TILES
+from scenery.entity_tiles import ENTITY_TILES
 
 def build_all_scenery_defs():
     combined = {}

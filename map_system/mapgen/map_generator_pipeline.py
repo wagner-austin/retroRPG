@@ -10,8 +10,8 @@
 #   build_model_common. This ensures there's one consistent place
 #   to handle map generation + layering.
 
-from procedural_map_generator.generator import generate_procedural_map
-from map_model_builder import build_model_common
+from map_system.mapgen.generator import generate_procedural_map
+from map_system.map_model_builder import build_model_common
 
 def create_procedural_model(width=100, height=100, mode_name="play"):
     """

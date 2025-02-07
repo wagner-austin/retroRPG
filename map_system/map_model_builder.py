@@ -11,16 +11,17 @@ import os
 import json
 import time
 
-from map_io_storage import parse_map_dict
-from player_char import Player
-from player_char_io import load_player
-from scenery_data.scenery_core import SceneryObject, ensure_layered_format
+from map_system.map_io_storage import parse_map_dict
+from players.player_char import Player
+from players.player_char_io import load_player
+from scenery.scenery_core import SceneryObject, ensure_layered_format
 from model_main import GameModel, GameContext
+from map_system.map_list_logic import MAPS_DIR  # use the common maps directory
 
 def build_model_common(filename_or_data, is_generated, mode_name):
     """
     A helper that does the heavy lifting of:
-      1) Loading raw map data from a dict or from 'maps/filename.json'
+      1) Loading raw map data from a dict or from 'saved_maps/filename.json'
       2) parse_map_dict() => extracting width, height, scenery
       3) Loading (or creating) a Player object
       4) Positioning & clamping player
@@ -40,7 +41,7 @@ def build_model_common(filename_or_data, is_generated, mode_name):
         raw_data = filename_or_data
     else:
         model_filename = filename_or_data
-        load_path = os.path.join("maps", filename_or_data)
+        load_path = os.path.join(MAPS_DIR, filename_or_data)
         try:
             with open(load_path, "r") as f:
                 raw_data = json.load(f)

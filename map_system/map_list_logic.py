@@ -6,13 +6,16 @@
 
 import os
 
-def ensure_maps_dir_exists(maps_dir="maps"):
+# Change this constant to modify the maps directory.
+MAPS_DIR = "saved_maps"
+
+def ensure_maps_dir_exists(maps_dir=MAPS_DIR):
     """
     Ensures that the maps_dir folder exists, creating it if needed.
     """
     os.makedirs(maps_dir, exist_ok=True)
 
-def get_map_list(maps_dir="maps", extension=".json"):
+def get_map_list(maps_dir=MAPS_DIR, extension=".json"):
     """
     Return a sorted list of all files in 'maps_dir' ending with 'extension'.
     Ensures that 'maps_dir' is created if missing.
@@ -22,7 +25,7 @@ def get_map_list(maps_dir="maps", extension=".json"):
     files.sort()
     return files
 
-def delete_map_file(filename, maps_dir="maps"):
+def delete_map_file(filename, maps_dir=MAPS_DIR):
     """
     Attempt to delete 'filename' inside 'maps_dir'.
     Return True on successful deletion, False on failure.
@@ -34,7 +37,7 @@ def delete_map_file(filename, maps_dir="maps"):
     except OSError:
         return False
 
-def file_exists_in_maps_dir(filename, maps_dir="maps"):
+def file_exists_in_maps_dir(filename, maps_dir=MAPS_DIR):
     """
     Return True if 'filename' exists inside 'maps_dir'.
     """

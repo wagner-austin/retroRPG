@@ -17,7 +17,7 @@ from .curses_utils import safe_addch, parse_two_color_names
 from .curses_selector_highlight import get_color_attr
 
 # We still need ALL_SCENERY_DEFS for char/color lookups.
-from scenery_data.scenery_manager import ALL_SCENERY_DEFS
+from scenery.scenery_manager import ALL_SCENERY_DEFS
 
 # NEW: import the layer order helper so we can draw in ascending z-index
 from layer_manager import get_layers_in_draw_order

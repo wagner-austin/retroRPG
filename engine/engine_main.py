@@ -9,19 +9,19 @@
 #
 # Tags: engine, main, loop, modular
 
-from engine_camera import update_camera_with_deadzone, center_camera_on_player
-from engine_framerate import manage_framerate
-from controls.controls_main import (
+from .engine_camera import update_camera_with_deadzone, center_camera_on_player
+from .engine_framerate import manage_framerate
+from .controls.controls_main import (
     handle_common_actions,
     handle_editor_actions,
     handle_play_actions,
 )
-from engine_respawn import handle_respawns
+from .engine_respawn import handle_respawns
 from engine_actionflash import update_action_flash
-from engine_npc import update_npcs
-from engine_network import handle_network
-from scenery_data.tile_effects import apply_tile_effects
-from scenery_data.scenery_core import get_scenery_def_id_at
+from .engine_npc import update_npcs
+from .engine_network import handle_network
+from scenery.tile_effects import apply_tile_effects
+from scenery.scenery_core import get_scenery_def_id_at
 
 class GameEngine:
     def __init__(self, model, context, game_input, game_renderer):

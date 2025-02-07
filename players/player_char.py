@@ -4,7 +4,7 @@
 # Tags: player, character, movement
 
 import debug
-from scenery_data.scenery_core import is_blocked
+from scenery.scenery_core import is_blocked
 
 class Player:
     def __init__(

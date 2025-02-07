@@ -6,9 +6,9 @@
 #
 # Tags: controls, input, main
 
-from controls.controls_common import handle_common_actions
-from controls.controls_editor import handle_editor_actions
-from controls.controls_play import handle_play_actions
+from .controls_common import handle_common_actions
+from .controls_editor import handle_editor_actions
+from .controls_play import handle_play_actions
 
 def dispatch_action(action, model, renderer, full_redraw_needed, mark_dirty_func):
     """

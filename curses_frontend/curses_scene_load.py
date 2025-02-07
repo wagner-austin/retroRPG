@@ -21,7 +21,7 @@ from .where_curses_themes_lives import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_selector_highlight import draw_global_selector_line
 
-from map_list_logic import get_map_list, delete_map_file
+from map_system.map_list_logic import get_map_list, delete_map_file
 
 def _restore_input_mode(stdscr):
     curses.noecho()
@@ -64,7 +64,7 @@ def _draw_load_background_art(stdscr):
 class LoadBaseLayer(SceneLayer):
     def __init__(self):
         super().__init__(name="load_base", z_index=0)
-    
+      
     def draw(self, renderer, dt, context):
         stdscr = renderer.stdscr
         # Clear the screen (base background)
@@ -74,7 +74,7 @@ class LoadBackgroundLayer(SceneLayer):
     def __init__(self):
         # Background art layer above the base.
         super().__init__(name="load_background", z_index=100)
-    
+      
     def draw(self, renderer, dt, context):
         stdscr = renderer.stdscr
         _draw_load_background_art(stdscr)
@@ -82,7 +82,7 @@ class LoadBackgroundLayer(SceneLayer):
 class LoadHeaderLayer(SceneLayer):
     def __init__(self):
         super().__init__(name="load_header", z_index=500)
-    
+      
     def draw(self, renderer, dt, context):
         stdscr = renderer.stdscr
         draw_title(stdscr, "Load Map", row=1)
@@ -96,7 +96,8 @@ class LoadMenuLayer(SceneLayer):
         # Map list layer.
         super().__init__(name="load_menu", z_index=400)
         self.options = ["Generate a new map"]
-        maps = get_map_list(maps_dir="maps", extension=".json")
+        # Now uses the default maps directory defined in map_list_logic.py
+        maps = get_map_list(extension=".json")
         self.options.extend(maps)
         self.current_index = 0
         self.frame_count = 0
@@ -137,7 +138,7 @@ class LoadMenuLayer(SceneLayer):
                 to_delete = self.options[self.current_index]
                 confirm = prompt_delete_confirmation(stdscr, to_delete)
                 if confirm:
-                    success = delete_map_file(to_delete, maps_dir="maps")
+                    success = delete_map_file(to_delete)
                     if success:
                         del self.options[self.current_index]
                         if self.current_index >= len(self.options):

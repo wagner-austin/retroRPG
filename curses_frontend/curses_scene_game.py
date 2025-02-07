@@ -18,7 +18,7 @@ from .scene_base import Scene
 from .scene_layer_base import SceneLayer
 from .curses_game_renderer import CursesGameRenderer
 from .where_curses_input_is_handled import CursesGameInput
-from engine_main import run_game_loop
+from engine.engine_main import run_game_loop
 
 class GameBackgroundLayer(SceneLayer):
     def __init__(self):
