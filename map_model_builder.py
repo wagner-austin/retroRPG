@@ -9,6 +9,7 @@
 
 import os
 import json
+import time
 
 from map_io_storage import parse_map_dict
 from player_char import Player

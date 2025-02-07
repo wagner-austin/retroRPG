@@ -1,5 +1,6 @@
 # FileName: scenery_core.py
-# version: 4.3
+# version: 4.3.1 (modified to prevent alternating floor tiles)
+#
 # Summary: Core scenery logic: a base SceneryObject class, plus layering & collision functions.
 # Tags: scenery, core
 
@@ -62,10 +63,13 @@ def ensure_layered_format(placed_scenery):
         for obj in obj_list:
             layer_name = layer_for_def_id(obj.definition_id)
             if layer_name == "floor":
-                # If we already have a floor, push it into _prev_floor
-                if tile_dict["floor"] is not None:
-                    tile_dict["_prev_floor"] = tile_dict["floor"]
+                # Overriding any existing floor to prevent alternating floors.
+                # Legacy code (commented out):
+                # if tile_dict["floor"] is not None:
+                #     tile_dict["_prev_floor"] = tile_dict["floor"]
+                # tile_dict["floor"] = obj
                 tile_dict["floor"] = obj
+                tile_dict["_prev_floor"] = None
             else:
                 if layer_name not in tile_dict:
                     tile_dict[layer_name] = []
@@ -96,8 +100,7 @@ def _init_tile_layers(placed_scenery, x, y):
 def append_scenery(placed_scenery, obj):
     """
     Place a new object into the correct layer for its definition.
-    If it's a floor tile, store exactly one. If that tile already had a different
-    floor, push it into _prev_floor.
+    If it's a floor tile, override any existing floor to prevent toggling.
     """
     x, y = obj.x, obj.y
     _init_tile_layers(placed_scenery, x, y)
@@ -106,11 +109,13 @@ def append_scenery(placed_scenery, obj):
     layer_name = layer_for_def_id(obj.definition_id)
 
     if layer_name == "floor":
-        # If there's already a floor different from this new one,
-        # store it in _prev_floor first.
-        if tile_dict["floor"] and tile_dict["floor"].definition_id != obj.definition_id:
-            tile_dict["_prev_floor"] = tile_dict["floor"]
+        # Overriding any existing floor to avoid alternating floors.
+        # Legacy logic (commented out):
+        # if tile_dict["floor"] and tile_dict["floor"].definition_id != obj.definition_id:
+        #     tile_dict["_prev_floor"] = tile_dict["floor"]
+        # tile_dict["floor"] = obj
         tile_dict["floor"] = obj
+        tile_dict["_prev_floor"] = None
     else:
         # Ensure we have a floor (even if it's EmptyFloor) so the tile isn't blank
         if tile_dict["floor"] is None:

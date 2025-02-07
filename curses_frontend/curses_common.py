@@ -8,7 +8,7 @@
 
 import curses
 import debug
-from .curses_color_init import color_pairs
+#from .curses_color_init import color_pairs
 from .curses_utils import safe_addstr, safe_addch, get_color_attr
 from .where_curses_themes_lives import CURRENT_THEME  # Newly added for default color usage
 
@@ -31,13 +31,12 @@ def _draw_art(stdscr, art_lines, start_row=1, start_col=2, color_name=None):
         row += 1
 
 
-
 def draw_title(stdscr: curses.window, text: str, row: int = 1, color_name: str = None) -> None:
     """
     Draw a title string at the given row. If color_name is not provided,
     use CURRENT_THEME's 'title_color'.
     """
-    from .where_curses_themes_lives import CURRENT_THEME
+    #from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["title_color"]
 
@@ -53,7 +52,7 @@ def draw_instructions(stdscr: curses.window, lines: list[str], from_bottom: int 
     Draws a list of instruction lines near the bottom of the screen. 
     If color_name not provided, use CURRENT_THEME's 'instructions_color'.
     """
-    from .where_curses_themes_lives import CURRENT_THEME
+    #from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["instructions_color"]
 
@@ -76,7 +75,7 @@ def draw_screen_frame(stdscr: curses.window, color_name: str = None) -> None:
     Draws a rectangular border around the entire screen, plus a "Debug mode" label if debug is enabled.
     If color_name not provided, use CURRENT_THEME's 'border_color'.
     """
-    from .where_curses_themes_lives import CURRENT_THEME
+    #from .where_curses_themes_lives import CURRENT_THEME
     if color_name is None:
         color_name = CURRENT_THEME["border_color"]
 
@@ -113,7 +112,7 @@ def draw_text(stdscr: curses.window, row: int, col: int, text: str,
     """
     Draw text at (row, col) with direct FG_on_BG approach.
     """
-    from .curses_utils import parse_two_color_names
+    #from .curses_utils import parse_two_color_names
     pair_name = f"{fg}_on_{bg}"
     attr = get_color_attr(pair_name, bold=bold, underline=underline)
     safe_addstr(stdscr, row, col, text, attr, clip_borders=True)

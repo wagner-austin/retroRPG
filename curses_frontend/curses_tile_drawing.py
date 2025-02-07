@@ -54,27 +54,6 @@ def draw_single_tile(stdscr, wx, wy, sx, sy, model, blank_attr):
     if not tile_dict:
         return  # nothing to draw
 
-    # ------------------------------------------------------
-    # LEGACY CODE (commented out) that caused black-map issue:
-    #
-    # floor_obj = tile_layers.get(layer_for_def_id)
-    # floor_color_name = "white_on_black"
-    # if floor_obj:
-    #     info = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
-    #     ch = info.get("ascii_char", floor_obj.char)
-    #     floor_color_name = info.get("color_name", "white_on_black")
-    #     floor_attr = get_color_attr(floor_color_name)
-    #     safe_addch(stdscr, sy, sx, ch, floor_attr, clip_borders=True)
-    #
-    # obj_list = (
-    #     tile_layers.get(layer_for_def_id, []) +
-    #     tile_layers.get(layer_for_def_id, []) +
-    #     tile_layers.get(layer_for_def_id, [])
-    # )
-    # for obj in obj_list: ...
-    #
-    # ------------------------------------------------------
-
     # NEW: multi-layer drawing approach
     # 1) Draw the floor first
     floor_obj = tile_dict.get("floor")
@@ -141,16 +120,6 @@ def draw_player_on_top(stdscr, model, map_top_offset):
 
     player_attr = compose_fg_with_floor_bg(floor_color_name, player_fg)
     safe_addch(stdscr, py, px, player_char, player_attr, clip_borders=True)
-
-    # -------------------------------------------------------
-    # LEGACY CODE (commented out) that used layer_for_def_id:
-    #
-    # objects_list = tile_layers.get(layer_for_def_id, [])
-    # trunk_tops = [o for o in objects_list if o.definition_id in (TREE_TRUNK_ID, TREE_TOP_ID)]
-    # for t_obj in trunk_tops: ...
-    #
-    # -------------------------------------------------------
-
     # If you have certain objects that should obscure the player (like "TreeTop"),
     # gather them from the "objects" or "overhead" layer, etc.:
     trunk_tops = []

@@ -1,5 +1,5 @@
 # FileName: curses_game_renderer.py
-# version: 4.2 (modified to delegate inventory display to curses_scene_inventory)
+# version: 4.2 (modified to delegate inventory display to curses_scene_inventory and to call draw_editor_overlay from curses_scene_editor)
 #
 # Summary: A curses-based in-game renderer implementing IGameRenderer. Renders only the camera region.
 #
@@ -13,14 +13,14 @@ from .curses_utils import safe_addstr
 from .curses_common import draw_screen_frame
 from .where_curses_themes_lives import CURRENT_THEME
 
-# We import the quick-save and yes/no logic from the curses scene:
-from .curses_scene_save import perform_quick_save
-
 # The tile-drawing logic is in curses_tile_drawing.py
 from .curses_tile_drawing import draw_single_tile, draw_player_on_top
 
 # Import the inventory summary drawer
 from .curses_scene_inventory import draw_inventory_summary
+
+# Import the editor overlay drawer
+from .curses_scene_editor import draw_editor_overlay
 
 
 class CursesGameRenderer(IGameRenderer):
@@ -103,11 +103,11 @@ class CursesGameRenderer(IGameRenderer):
         self.stdscr.clear()
         self._draw_screen_frame()
 
-        # Display editor info if in editor mode, or an inventory summary otherwise
-        if model.context.enable_editor_commands and model.editor_scenery_list:
-            sel_def_id = model.editor_scenery_list[model.editor_scenery_index][0]
-            self._draw_text(1, 2, f"Editor Mode - Selected: {sel_def_id}")
-        else:
+
+        # New approach: delegate the editor overlay to curses_scene_editor,
+        # and if it's not in editor mode, show inventory summary
+        draw_editor_overlay(self.stdscr, model)
+        if not (model.context.enable_editor_commands and model.editor_scenery_list):
             draw_inventory_summary(self.stdscr, model, row=1, col=2)
 
         max_h, max_w = self.stdscr.getmaxyx()
@@ -146,9 +146,3 @@ class CursesGameRenderer(IGameRenderer):
             color_name = CURRENT_THEME["text_color"]
         attr = get_color_attr(color_name, bold=bold, underline=underline)
         safe_addstr(self.stdscr, row, col, text, attr, clip_borders=True)
-
-    def quick_save(self, model):
-        """
-        Perform a quick-save by delegating to the curses_scene_save logic.
-        """
-        perform_quick_save(model, self)
