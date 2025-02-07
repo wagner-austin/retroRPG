@@ -13,7 +13,7 @@
 # Tags: map, load, scene
 
 import curses
-import debug
+import tools.debug as debug
 from .scene_base import Scene
 from .scene_layer_base import SceneLayer
 from .curses_common import draw_screen_frame, draw_title, draw_instructions, _draw_art

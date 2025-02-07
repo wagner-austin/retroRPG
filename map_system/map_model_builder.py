@@ -9,13 +9,12 @@
 
 import os
 import json
-import time
 
 from map_system.map_io_storage import parse_map_dict
 from players.player_char import Player
 from players.player_char_io import load_player
 from scenery.scenery_core import SceneryObject, ensure_layered_format
-from model_main import GameModel, GameContext
+from core.model_main import GameModel, GameContext
 from map_system.map_list_logic import MAPS_DIR  # use the common maps directory
 
 def build_model_common(filename_or_data, is_generated, mode_name):

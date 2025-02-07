@@ -12,12 +12,12 @@
 # Tags: map, save, scene
 
 import curses
-import debug
+import tools.debug as debug
 from map_system.map_list_logic import get_map_list
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_common import draw_screen_frame, draw_title, draw_instructions, _draw_art
 from .where_curses_themes_lives import CURRENT_THEME
-from scene_save_logic import (
+from map_system.scene_save_logic import (
     save_player_data,
     does_file_exist_in_maps_dir,
     build_and_save_map,

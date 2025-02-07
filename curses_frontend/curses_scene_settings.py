@@ -12,7 +12,7 @@
 # Tags: scene, settings
 
 import curses
-import debug
+import tools.debug as debug
 from .scene_base import Scene
 from .scene_layer_base import SceneLayer
 from .curses_common import draw_screen_frame, draw_title, _draw_art, draw_instructions
@@ -71,11 +71,13 @@ class SettingsMenuLayer(SceneLayer):
             row += 1
 
     def handle_key(self, key):
+        if key in (ord('v'), ord('V')):
+            debug.toggle_debug()
         if key in (curses.KEY_UP, ord('w')):
             self.current_select_slot = max(0, self.current_select_slot - 1)
         elif key in (curses.KEY_DOWN, ord('s')):
             self.current_select_slot = min(len(self.menu_lines) - 1, self.current_select_slot + 1)
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key in (curses.KEY_ENTER, 10, 13, 32):
             if self.current_select_slot == 0:
                 debug.toggle_debug()
                 return None

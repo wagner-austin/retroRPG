@@ -17,7 +17,7 @@ from .controls.controls_main import (
     handle_play_actions,
 )
 from .engine_respawn import handle_respawns
-from engine_actionflash import update_action_flash
+from .engine_actionflash import update_action_flash
 from .engine_npc import update_npcs
 from .engine_network import handle_network
 from scenery.tile_effects import apply_tile_effects

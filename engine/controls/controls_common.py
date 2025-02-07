@@ -7,7 +7,7 @@
 #
 # Tags: controls, input, common
 
-import debug
+import tools.debug as debug
 
 def handle_common_actions(action, model, renderer, mark_dirty_func):
     """

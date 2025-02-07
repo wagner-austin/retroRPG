@@ -7,7 +7,7 @@
 # Tags: ui, rendering, curses
 
 import curses
-import debug
+import tools.debug as debug
 from .curses_utils import safe_addstr, safe_addch, get_color_attr
 from .where_curses_themes_lives import CURRENT_THEME  # Newly added for default color usage
 

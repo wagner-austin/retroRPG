@@ -20,7 +20,7 @@ from .curses_selector_highlight import get_color_attr
 from scenery.scenery_manager import ALL_SCENERY_DEFS
 
 # NEW: import the layer order helper so we can draw in ascending z-index
-from layer_manager import get_layers_in_draw_order
+from scenery.layer_manager import get_layers_in_draw_order
 
 # If you have special logic for "TreeTop" or "TreeTrunk", you might import them:
 # from scenery_placement_utils import TREE_TOP_ID, TREE_TRUNK_ID

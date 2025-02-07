@@ -8,6 +8,7 @@
 # Tags: scene, home, menu
 
 import curses
+import tools.debug as debug
 from .scene_base import Scene
 from .scene_layer_base import SceneLayer
 from .curses_common import draw_screen_frame, draw_title, _draw_art
@@ -113,11 +114,13 @@ class HomeScene(Scene):
         self.layers = [self.base_layer, self.bg_layer, self.menu_layer, self.title_layer]
 
     def handle_input(self, key):
-        if key in (curses.KEY_UP, ord('w')):
+        if key in (ord('v'), ord('V')):
+            debug.toggle_debug()
+        if key in (curses.KEY_UP, ord('w'), ord('W')):
             self.menu_layer.move_selection_up()
-        elif key in (curses.KEY_DOWN, ord('s')):
+        elif key in (curses.KEY_DOWN, ord('s'), ord ('S')):
             self.menu_layer.move_selection_down()
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key in (curses.KEY_ENTER, 10, 13, 32):
             return self.menu_layer.get_current_choice()
         elif key == ord('1'):
             return 1

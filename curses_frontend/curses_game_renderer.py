@@ -6,7 +6,7 @@
 # Tags: curses, ui, rendering
 
 import curses
-from engine_interfaces import IGameRenderer
+from engine.engine_interfaces import IGameRenderer
 
 from .curses_selector_highlight import get_color_attr
 from .curses_utils import safe_addstr

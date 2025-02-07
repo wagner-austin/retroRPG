@@ -3,7 +3,7 @@
 # Summary: Defines the Player class with movement, stats, and inventory fields used in the game engine.
 # Tags: player, character, movement
 
-import debug
+import tools.debug as debug
 from scenery.scenery_core import is_blocked
 
 class Player:

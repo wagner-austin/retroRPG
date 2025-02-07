@@ -7,7 +7,7 @@
 # Tags: controls, input, play
 
 from scenery.scenery_core import get_objects_at, remove_scenery
-from utils_main import get_front_tile
+from tools.utils_main import get_front_tile
 
 def handle_play_actions(action, model, renderer, full_redraw_needed, mark_dirty_func):
     """

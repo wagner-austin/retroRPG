@@ -4,7 +4,7 @@
 #          (rivers, grass, trees, rocks, etc.) in order.
 # Tags: map, generation, pipeline
 
-import debug
+import tools.debug as debug
 
 # -------------------------------------------------------------------------
 # 2) FEATURE TOGGLES

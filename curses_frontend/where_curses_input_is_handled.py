@@ -8,7 +8,7 @@
 # Tags: curses, ui, rendering
 
 import curses
-from engine_interfaces import IGameInput
+from engine.engine_interfaces import IGameInput
 
 class CursesGameInput(IGameInput):
     """
