@@ -50,20 +50,27 @@ class CursesGameRenderer(IGameRenderer):
         visible_cols = max_w - self.map_side_offset
         return (visible_cols, visible_rows)
 
-    def render_scene(self, model, scene_layers):
+
+    def render_scene(self, scene, dt=0, context=None):
         """
-        Renders a set of scene layers, each dict with keys {name, z, visible}.
-        This is distinct from the normal 'render' used for in-game camera updates.
+        Renders a Scene object that provides .get_layers().
+        :param scene: a Scene instance containing SceneLayer objects.
+        :param dt: a frame counter or time delta.
+        :param context: the game model or other relevant data.
         """
         self.stdscr.erase()
 
-        # Sort layers by z-order
-        sorted_layers = sorted(scene_layers, key=lambda l: l["z"])
-        for layer in sorted_layers:
-            if layer.get("visible", True):
-                layer_name = layer.get("name", "")
-                self._render_layer(layer_name, model)
+        # 1) Retrieve layers from the scene.
+        layers = scene.get_layers()  # This returns a list of SceneLayer objects.
 
+        # 2) Sort layers by their z_index.
+        layers_sorted = sorted(layers, key=lambda layer: layer.z_index)
+
+        # 3) Draw each layer (lowest z_index drawn first).
+        for layer in layers_sorted:
+            layer.draw(self, dt, context)
+
+        # 4) Refresh the screen.
         self.stdscr.noutrefresh()
         curses.doupdate()
 
@@ -102,7 +109,6 @@ class CursesGameRenderer(IGameRenderer):
     def _full_redraw(self, model):
         self.stdscr.clear()
         self._draw_screen_frame()
-
 
         # New approach: delegate the editor overlay to curses_scene_editor,
         # and if it's not in editor mode, show inventory summary
