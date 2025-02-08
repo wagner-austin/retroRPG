@@ -13,8 +13,6 @@
 #
 # Tags: scene, menu, manager, transition
 
-import time
-import curses
 from .curses_color_init import init_colors
 
 # Import plugin-based scene classes
@@ -87,14 +85,15 @@ class MenuFlowManager:
                     load_scene = LoadScene()
                     self.run_transition(home_scene, load_scene)
                     self.current_state = "PLAY"
-                elif user_choice == 2:  # Quit selected
-                    self.current_state = "QUIT"
-                elif user_choice == 3:  # Settings selected
+                elif user_choice == 2:  # Settings selected
                     settings_scene = SettingsScene()
                     self.run_transition(home_scene, settings_scene)
                     _ = self.run_scene(settings_scene)
                     self.run_transition(settings_scene, home_scene)
                     self.current_state = "HOME"
+                elif user_choice == 3:  # Quit selected
+                    self.current_state = "QUIT"
+                    
             elif self.current_state == "PLAY":
                 load_scene = LoadScene()
                 selection = self.run_scene(load_scene)

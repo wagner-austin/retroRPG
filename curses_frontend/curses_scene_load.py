@@ -1,6 +1,5 @@
 # File: curses_scene_load.py
-# version: 2.3
-#
+# version: 2.3 (updated to use shared layers)
 # Summary:
 #   Defines LoadScene – a plugin‑based scene for loading or generating a map.
 #   The scene now uses layered drawing:
@@ -9,80 +8,24 @@
 #       - Global rain effect (z_index=300, from global_effects_manager)
 #       - Map list (z_index=400)
 #       - Header (title and instructions, z_index=500)
-#
 # Tags: map, load, scene
 
 import curses
 import tools.debug as debug
 from .scene_base import Scene
 from .scene_layer_base import SceneLayer
-from .curses_common import draw_screen_frame, draw_title, draw_instructions, _draw_art
+from .curses_common import draw_title, draw_instructions
 from .where_curses_themes_lives import CURRENT_THEME
 from .curses_utils import safe_addstr, get_color_attr
 from .curses_selector_highlight import draw_global_selector_line
 
 from map_system.map_list_logic import get_map_list, delete_map_file
 
-def _restore_input_mode(stdscr):
-    curses.noecho()
-    curses.curs_set(0)
-    curses.napms(50)
-    curses.flushinp()
-    stdscr.nodelay(True)
-
-def prompt_delete_confirmation(stdscr, filename):
-    max_h, max_w = stdscr.getmaxyx()
-    question = f"Delete '{filename}'? (y/n)"
-    attr = get_color_attr(CURRENT_THEME["confirmation_color"])
-
-    row = max_h - 2
-    blank_line = " " * (max_w - 4)
-    safe_addstr(stdscr, row, 2, blank_line, attr, clip_borders=False)
-    safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
-    stdscr.refresh()
-
-    stdscr.nodelay(False)
-    curses.curs_set(1)
-    curses.echo()
-
-    while True:
-        c = stdscr.getch()
-        if c in (ord('y'), ord('Y')):
-            _restore_input_mode(stdscr)
-            return True
-        elif c in (ord('n'), ord('N'), ord('q'), 27):
-            _restore_input_mode(stdscr)
-            return False
-
-def _draw_load_background_art(stdscr):
-    stdscr.keypad(True)
-    curses.curs_set(0)
-    draw_screen_frame(stdscr)
-    crocodile_lines = CURRENT_THEME.get("crocodile_art", [])
-    _draw_art(stdscr, crocodile_lines, start_row=3, start_col=2)
-
-class LoadBaseLayer(SceneLayer):
-    def __init__(self):
-        super().__init__(name="load_base", z_index=0)
-      
-    def draw(self, renderer, dt, context):
-        stdscr = renderer.stdscr
-        # Clear the screen (base background)
-        stdscr.erase()
-
-class LoadBackgroundLayer(SceneLayer):
-    def __init__(self):
-        # Background art layer above the base.
-        super().__init__(name="load_background", z_index=100)
-      
-    def draw(self, renderer, dt, context):
-        stdscr = renderer.stdscr
-        _draw_load_background_art(stdscr)
 
 class LoadHeaderLayer(SceneLayer):
     def __init__(self):
         super().__init__(name="load_header", z_index=500)
-      
+
     def draw(self, renderer, dt, context):
         stdscr = renderer.stdscr
         draw_title(stdscr, "Load Map", row=1)
@@ -93,7 +36,6 @@ class LoadHeaderLayer(SceneLayer):
 
 class LoadMenuLayer(SceneLayer):
     def __init__(self):
-        # Map list layer.
         super().__init__(name="load_menu", z_index=400)
         self.options = ["Generate a new map"]
         # Now uses the default maps directory defined in map_list_logic.py
@@ -152,16 +94,12 @@ class LoadMenuLayer(SceneLayer):
 class LoadScene(Scene):
     def __init__(self):
         super().__init__()
-        self.base_layer = LoadBaseLayer()
-        self.bg_layer = LoadBackgroundLayer()
+        # Use the shared layers from layer_presets.
+        from .layer_presets import BaseEraseLayer, FrameArtLayer
+        self.base_layer = BaseEraseLayer()
+        self.bg_layer = FrameArtLayer("crocodile_art", z_index=100)
         self.menu_layer = LoadMenuLayer()
         self.header_layer = LoadHeaderLayer()
-        # Layer order:
-        # 1. Base background (z_index 0)
-        # 2. Background art (z_index 100)
-        # 3. Global rain effect (z_index 300, from global_effects_manager)
-        # 4. Map list (z_index 400)
-        # 5. Header (z_index 500)
         self.layers = [self.base_layer, self.bg_layer, self.menu_layer, self.header_layer]
 
     def handle_input(self, key):
@@ -173,3 +111,34 @@ class LoadScene(Scene):
 
     def _get_stdscr(self):
         return curses.initscr()
+
+def prompt_delete_confirmation(stdscr, filename):
+    max_h, max_w = stdscr.getmaxyx()
+    question = f"Delete '{filename}'? (y/n)"
+    attr = get_color_attr(CURRENT_THEME["confirmation_color"])
+
+    row = max_h - 2
+    blank_line = " " * (max_w - 4)
+    safe_addstr(stdscr, row, 2, blank_line, attr, clip_borders=False)
+    safe_addstr(stdscr, row, 2, question, attr, clip_borders=False)
+    stdscr.refresh()
+
+    stdscr.nodelay(False)
+    curses.curs_set(1)
+    curses.echo()
+
+    while True:
+        c = stdscr.getch()
+        if c in (ord('y'), ord('Y')):
+            _restore_input_mode(stdscr)
+            return True
+        elif c in (ord('n'), ord('N'), ord('q'), ord('Q'), 27):
+            _restore_input_mode(stdscr)
+            return False
+
+def _restore_input_mode(stdscr):
+    curses.noecho()
+    curses.curs_set(0)
+    curses.napms(50)
+    curses.flushinp()
+    stdscr.nodelay(True)

@@ -1,4 +1,4 @@
-## FileName: RetroRPG.py
+# FileName: RetroRPG.py
 # version: 1.6
 # Summary: Main entry point for RetroRPG, handling high-level init, then calling MenuFlowManager.
 # Tags: main, entry, initialization

@@ -1,47 +1,20 @@
 # File: curses_scene_home.py
-# version: 2.2 (refactored to plugin architecture with separated base background)
-#
+# version: 2.2 (refactored to plugin architecture with separated base/background)
 # Summary:
 #   Defines HomeScene, which uses plugin layers for the base background,
 #   background art, menu, and title.
-#
 # Tags: scene, home, menu
 
 import curses
 import tools.debug as debug
 from .scene_base import Scene
 from .scene_layer_base import SceneLayer
-from .curses_common import draw_screen_frame, draw_title, _draw_art
+from .curses_common import draw_title
 from .curses_selector_highlight import draw_global_selector_line
-from .where_curses_themes_lives import CURRENT_THEME
 
-class HomeBaseLayer(SceneLayer):
-    def __init__(self):
-        super().__init__(name="home_base", z_index=0)
-    
-    def draw(self, renderer, dt, context):
-        # Clear the screen or fill with a base color.
-        stdscr = renderer.stdscr
-        stdscr.erase()
-        # Optionally, set a background fill:
-        # stdscr.bkgd(' ', curses.color_pair(0))
-
-class HomeBackgroundLayer(SceneLayer):
-    def __init__(self):
-        # Background art layer above the base.
-        super().__init__(name="home_background", z_index=100)
-
-    def draw(self, renderer, dt, context):
-        stdscr = renderer.stdscr
-        draw_screen_frame(stdscr)
-        # Legacy: Removed drawing the title here.
-        # draw_title(stdscr, "Welcome to Retro RPG!", row=1)
-        main_menu_lines = CURRENT_THEME.get("main_menu_art", [])
-        _draw_art(stdscr, main_menu_lines, start_row=3, start_col=2)
 
 class HomeTitleLayer(SceneLayer):
     def __init__(self):
-        # Title layer drawn on top.
         super().__init__(name="home_title", z_index=500)
 
     def draw(self, renderer, dt, context):
@@ -50,13 +23,12 @@ class HomeTitleLayer(SceneLayer):
 
 class HomeMenuLayer(SceneLayer):
     def __init__(self):
-        # Menu layer (drawn above background art but below the title).
         super().__init__(name="home_menu", z_index=400)
         self.menu_lines = [
             "~~~~~~~~~",
             "1) Play",
-            "2) Quit",
-            "3) Settings",
+            "2) Settings",
+            "3) Quit",
             "~~~~~~~~~"
         ]
         self.current_select_slot = 0  # index into selectable menu items
@@ -94,15 +66,17 @@ class HomeMenuLayer(SceneLayer):
         if self.current_select_slot == 0:
             return 1  # "Play"
         elif self.current_select_slot == 1:
-            return 2  # "Quit"
+            return 2  # "Settings"
         else:
-            return 3  # "Settings"
+            return 3  # "Quit"
 
 class HomeScene(Scene):
     def __init__(self):
         super().__init__()
-        self.base_layer = HomeBaseLayer()
-        self.bg_layer = HomeBackgroundLayer()
+        # Use the shared layers from layer_presets.
+        from .layer_presets import BaseEraseLayer, FrameArtLayer
+        self.base_layer = BaseEraseLayer()
+        self.bg_layer = FrameArtLayer("main_menu_art", z_index=100)
         self.menu_layer = HomeMenuLayer()
         self.title_layer = HomeTitleLayer()
         # Layer order:
@@ -111,7 +85,12 @@ class HomeScene(Scene):
         # 3. Global effects (z_index 300, added via the global_effects_manager)
         # 4. Menu (z_index 400)
         # 5. Title (z_index 500)
-        self.layers = [self.base_layer, self.bg_layer, self.menu_layer, self.title_layer]
+        self.layers = [
+            self.base_layer,
+            self.bg_layer,
+            self.menu_layer,
+            self.title_layer
+        ]
 
     def handle_input(self, key):
         if key in (ord('v'), ord('V')):
@@ -122,10 +101,10 @@ class HomeScene(Scene):
             self.menu_layer.move_selection_down()
         elif key in (curses.KEY_ENTER, 10, 13, 32):
             return self.menu_layer.get_current_choice()
-        elif key == ord('1'):
+        elif key in (ord('1'), ord('p'), ord('P')):
             return 1
-        elif key == ord('2'):
+        elif key in (ord('2'), ord('s'), ord('S')):
             return 2
-        elif key == ord('3'):
+        elif key in (ord('3'), ord('q'), ord('Q'), 27):
             return 3
         return None
