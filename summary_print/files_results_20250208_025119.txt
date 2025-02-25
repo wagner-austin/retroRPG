@@ -1,0 +1,2320 @@
+
+
+
+
+# File: pygame_color_init.py
+# version: 3.3
+#
+# Summary: Initializes pygame color pairs. This maps friendly color pair names to actual
+# RGB tuples for foreground and background colors.
+#
+# Tags: colors, pygame, setup
+
+# Standard 8 colors mapped to friendly names using RGB tuples:
+BASE_COLORS = {
+    "black":   (0, 0, 0),
+    "red":     (255, 0, 0),
+    "green":   (0, 255, 0),
+    "yellow":  (255, 255, 0),
+    "blue":    (0, 0, 255),
+    "magenta": (255, 0, 255),
+    "cyan":    (0, 255, 255),
+    "white":   (255, 255, 255),
+}
+
+# Extended color definitions
+EXTENDED_COLORS = {
+    "light_gray": (180, 180, 180),
+    "dark_gray":  (80, 80, 80),
+}
+
+# Global dictionary for color pairs.
+# Keys are strings in the format 'foreground_on_background'
+# Values are tuples: (foreground RGB tuple, background RGB tuple)
+color_pairs = {}
+
+def define_extended_colors():
+    """
+    In pygame, colors are defined directly as RGB tuples.
+    This function is retained for compatibility with the curses layout.
+    """
+    pass
+
+def init_colors():
+    """
+    Initializes pygame colors by merging base and extended colors,
+    then creating a mapping of all foreground/background combinations.
+    """
+    define_extended_colors()
+
+    # Merge base + extended colors.
+    all_colors = dict(BASE_COLORS)
+    all_colors.update(EXTENDED_COLORS)
+
+    # Create color pairs for all combinations.
+    for fg_name, fg_value in all_colors.items():
+        for bg_name, bg_value in all_colors.items():
+            pair_name = f"{fg_name}_on_{bg_name}"
+            color_pairs[pair_name] = (fg_value, bg_value)
+
+
+
+# File: pygame_common.py
+# version: 2.10
+#
+# Summary: Provides functions and helpers for drawing frames, labels, etc. in pygame.
+#          Now ensures that nothing is drawn outside of the frame.
+#
+# Tags: ui, rendering, pygame
+
+import pygame
+import tools.debug as debug
+from .pygame_utils import safe_addstr, safe_addch, get_color_attr
+from .where_pygame_themes_lives import CURRENT_THEME  # For default color usage
+
+def _draw_art(screen, art_lines, start_row=1, start_col=2, color_name=None):
+    """
+    Renders 'art_lines' at (start_row, start_col) using a specified color_name.
+    If color_name is None, uses CURRENT_THEME's 'ascii_art_color'.
+    Safe for static or single-frame usage.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["ascii_art_color"]
+
+    attr = get_color_attr(color_name)
+    max_w, max_h = screen.get_size()  # pygame returns (width, height)
+    row = start_row
+    for line in art_lines:
+        if row >= max_h - 1:
+            break
+        safe_addstr(screen, row, start_col, line, attr, clip_borders=True)
+        row += 1
+
+def draw_title(screen, text, row=1, color_name=None):
+    """
+    Draws a title string at the given row. If color_name is not provided,
+    uses CURRENT_THEME's 'title_color'.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["title_color"]
+
+    max_w, max_h = screen.get_size()
+    if row < 0 or row >= max_h:
+        return
+    col = 2
+    attr = get_color_attr(color_name, bold=True)
+    safe_addstr(screen, row, col, text, attr, clip_borders=True)
+
+def draw_instructions(screen, lines, from_bottom=2, color_name=None):
+    """
+    Draws a list of instruction lines near the bottom of the screen.
+    If color_name is not provided, uses CURRENT_THEME's 'instructions_color'.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["instructions_color"]
+
+    max_w, max_h = screen.get_size()
+    attr = get_color_attr(color_name)
+    start_row = max_h - from_bottom - len(lines)
+    if start_row < 1:
+        start_row = 1
+
+    row = start_row
+    for line in lines:
+        if row >= max_h - 1:
+            break
+        safe_addstr(screen, row, 2, line, attr, clip_borders=True)
+        row += 1
+
+def draw_screen_frame(screen, color_name=None):
+    """
+    Draws a rectangular border around the entire screen plus a "Debug mode" label
+    if debug is enabled. If color_name is not provided, uses CURRENT_THEME's 'border_color'.
+    """
+    if color_name is None:
+        color_name = CURRENT_THEME["border_color"]
+
+    max_w, max_h = screen.get_size()
+    border_color = get_color_attr(color_name)
+    
+    # Draw border using pygame's draw.rect (width of 1 pixel)
+    pygame.draw.rect(screen, border_color, pygame.Rect(0, 0, max_w, max_h), 1)
+
+    # Draw a debug label if enabled.
+    if debug.DEBUG_CONFIG["enabled"]:
+        label = "Debug mode: On"
+        font = pygame.font.Font(None, 24)
+        dbg_color = get_color_attr("white_on_black")
+        text_surface = font.render(label, True, dbg_color)
+        label_width = text_surface.get_width()
+        x = max_w - label_width - 6  # place label near the top-right
+        y = 0
+        screen.blit(text_surface, (x, y))
+
+def draw_text(screen, row, col, text, fg="white", bg="black", bold=False, underline=False):
+    """
+    Draws text at (row, col) using a direct FG_on_BG approach.
+    """
+    pair_name = f"{fg}_on_{bg}"
+    attr = get_color_attr(pair_name, bold=bold, underline=underline)
+    safe_addstr(screen, row, col, text, attr, clip_borders=True)
+
+def draw_inside_frame_ch(screen, y, x, ch, attr):
+    """
+    Draws a single character inside the frame boundaries.
+    Only draws if (y, x) is inside the frame (i.e. between the border lines).
+    """
+    max_w, max_h = screen.get_size()
+    if 1 <= y < max_h - 1 and 1 <= x < max_w - 1:
+        safe_addch(screen, y, x, ch, attr, clip_borders=True)
+
+
+
+# File: pygame_effect_layers.py
+# version: 1.2
+#
+# Summary:
+#   Provides plugin layer classes for dynamic weather effects: Snow and Rain.
+#   These layers now use drawing helpers to prevent drawing outside of the frame.
+#
+# Tags: effects, snow, rain, scene, plugin
+
+import random
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_utils import get_color_attr, draw_inside_frame_ch  # Assumes these helpers are adapted for pygame
+
+class SnowEffectLayer(SceneLayer):
+    def __init__(self, num_flakes=50, color_name="white_on_black"):
+        # Set a high z_index so the snow appears on top of all other layers.
+        super().__init__(name="snow_effect", z_index=300)
+        self.num_flakes = num_flakes
+        self.color_name = color_name
+        self.snowflakes = []
+        self.initialized = False
+        self.last_width = None
+        self.last_height = None
+
+    def _initialize_snowflakes(self, width, height):
+        self.snowflakes = []
+        for _ in range(self.num_flakes):
+            # Ensure the snowflake is drawn inside the frame.
+            x = random.randint(1, width - 2)
+            y = random.randint(1, height - 2)
+            self.snowflakes.append({"x": x, "y": y})
+        self.last_width = width
+        self.last_height = height
+        self.initialized = True
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        width, height = screen.get_size()  # (width, height)
+        # Reinitialize if the screen size has changed or if not yet initialized.
+        if (not self.initialized) or (width != self.last_width or height != self.last_height):
+            self._initialize_snowflakes(width, height)
+        # Update snowflake positions every 100 frames.
+        if dt % 100 == 0:
+            for flake in self.snowflakes:
+                flake["y"] += 1
+                if flake["y"] >= height - 1:
+                    flake["y"] = 1
+                    flake["x"] = random.randint(1, width - 2)
+        attr = get_color_attr(self.color_name)
+        for flake in self.snowflakes:
+            ch = random.choice(['*', '.'])
+            draw_inside_frame_ch(screen, flake["y"], flake["x"], ch, attr)
+
+class RainEffectLayer(SceneLayer):
+    def __init__(self, num_drops=50, color_name="blue_on_black", direction="down"):
+        # Use a high z_index so rain appears above other layers.
+        super().__init__(name="rain_effect", z_index=300)
+        self.num_drops = num_drops
+        self.color_name = color_name
+        self.direction = direction.lower()  # Accept "down", "left", or "right"
+        self.raindrops = []
+        self.initialized = False
+        self.last_width = None
+        self.last_height = None
+
+    def _initialize_raindrops(self, width, height):
+        self.raindrops = []
+        for _ in range(self.num_drops):
+            # Ensure the raindrop is drawn inside the frame.
+            x = random.randint(1, width - 2)
+            y = random.randint(1, height - 2)
+            self.raindrops.append({"x": x, "y": y})
+        self.last_width = width
+        self.last_height = height
+        self.initialized = True
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        width, height = screen.get_size()
+        # Reinitialize if needed.
+        if (not self.initialized) or (width != self.last_width or height != self.last_height):
+            self._initialize_raindrops(width, height)
+        # Update raindrop positions every 100 frames for smoothness.
+        if dt % 100 == 0:
+            for drop in self.raindrops:
+                if self.direction == "down":
+                    drop["y"] += 1
+                    if drop["y"] >= height - 1:
+                        drop["y"] = 1
+                        drop["x"] = random.randint(1, width - 2)
+                elif self.direction == "left":
+                    drop["x"] -= 1
+                    if drop["x"] < 1:
+                        drop["x"] = width - 2
+                        drop["y"] = random.randint(1, height - 2)
+                elif self.direction == "right":
+                    drop["x"] += 1
+                    if drop["x"] >= width - 1:
+                        drop["x"] = 1
+                        drop["y"] = random.randint(1, height - 2)
+        attr = get_color_attr(self.color_name)
+        for drop in self.raindrops:
+            ch = '|' if self.direction == "down" else '-'
+            draw_inside_frame_ch(screen, drop["y"], drop["x"], ch, attr)
+
+
+
+# FileName: pygame_game_renderer.py
+# version: 4.2 (updated with get_surface() for dynamic use)
+# Summary: A pygame-based renderer implementing IGameRenderer.
+#          Renders scene layers and provides access to the main display surface.
+# Tags: pygame, ui, renderer
+
+import pygame
+from engine.engine_interfaces import IGameRenderer
+
+class PygameGameRenderer(IGameRenderer):
+    def __init__(self, screen):
+        """
+        Initialize the renderer with the given pygame Surface.
+        """
+        self.screen = screen
+        self.map_top_offset = 3
+        self.map_side_offset = 0
+
+        # Hide the mouse cursor for a cleaner UI.
+        pygame.mouse.set_visible(False)
+
+    def get_surface(self):
+        """
+        Returns the underlying pygame Surface.
+        This method is used by scene layers to obtain the drawing surface.
+        """
+        return self.screen
+
+    def get_visible_size(self):
+        """
+        Returns the visible size of the screen (in pixels) minus any offsets.
+        """
+        width, height = self.screen.get_size()
+        visible_rows = height - self.map_top_offset
+        if visible_rows < 0:
+            visible_rows = 0
+        visible_cols = width - self.map_side_offset
+        return (visible_cols, visible_rows)
+
+    def render_scene(self, scene, dt=0, context=None):
+        """
+        Renders a Scene object that provides .get_layers().
+        """
+        # Clear the screen (fill with black).
+        self.screen.fill((0, 0, 0))
+
+        # Retrieve scene layers.
+        layers = scene.get_layers()
+
+        # Sort layers by their z_index.
+        layers_sorted = sorted(layers, key=lambda layer: layer.z_index)
+
+        # Draw each layer (lowest z_index drawn first).
+        for layer in layers_sorted:
+            layer.draw(self, dt, context)
+
+        # Update the display.
+        pygame.display.flip()
+
+
+# FileName: pygame_global_effects_manager.py
+# version: 1.0
+# Summary: Manages global effect layers (e.g., weather) in Pygame. 
+# Tags: effect, manager, pygame
+
+# A global list of effect layers, e.g. SnowEffectLayer, RainEffectLayer
+global_effect_layers = []
+
+def add_effect_layer(layer):
+    """Add an effect layer instance to the global list."""
+    global_effect_layers.append(layer)
+
+def remove_effect_layer(layer):
+    """Remove an effect layer from the global list."""
+    if layer in global_effect_layers:
+        global_effect_layers.remove(layer)
+
+def clear_effect_layers():
+    """Clear all global effect layers."""
+    global_effect_layers.clear()
+
+def get_effect_layers():
+    """Return the aggregated list of global effect layers."""
+    return global_effect_layers
+
+
+
+# FileName: pygame_input.py
+# version: 1.0
+# Summary: Pygame-based input class implementing IGameInput from engine_interfaces.
+# Tags: input, pygame
+
+import pygame
+from engine.engine_interfaces import IGameInput
+
+class PygameGameInput(IGameInput):
+    """
+    Gathers user events from pygame.event.get(), 
+    returns a list of high-level action strings ("MOVE_UP", "QUIT", etc.).
+    """
+
+    def get_actions(self):
+        actions = []
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                actions.append("QUIT")
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_q, pygame.K_ESCAPE):
+                    actions.append("QUIT")
+
+                elif event.key in (pygame.K_w, pygame.K_UP):
+                    actions.append("MOVE_UP")
+                elif event.key in (pygame.K_s, pygame.K_DOWN):
+                    actions.append("MOVE_DOWN")
+                elif event.key in (pygame.K_a, pygame.K_LEFT):
+                    actions.append("MOVE_LEFT")
+                elif event.key in (pygame.K_d, pygame.K_RIGHT):
+                    actions.append("MOVE_RIGHT")
+
+                elif event.key == pygame.K_SPACE:
+                    actions.append("INTERACT")
+                elif event.key == pygame.K_e:
+                    actions.append("EDITOR_TOGGLE")
+                elif event.key == pygame.K_o:
+                    actions.append("SAVE_QUICK")
+                elif event.key == pygame.K_v:
+                    actions.append("DEBUG_TOGGLE")
+
+                # Editor
+                elif event.key in (pygame.K_p, ):
+                    actions.append("PLACE_ITEM")
+                elif event.key in (pygame.K_x, ):
+                    actions.append("REMOVE_TOP")
+                elif event.key in (pygame.K_u, ):
+                    actions.append("UNDO")
+                elif event.key in (pygame.K_l, ):
+                    actions.append("NEXT_ITEM")
+                elif event.key in (pygame.K_k, ):
+                    actions.append("PREV_ITEM")
+
+                # Show Inventory
+                elif event.key in (pygame.K_i, ):
+                    actions.append("SHOW_INVENTORY")
+
+        return actions
+
+
+
+# File: pygame_layer_presets.py
+# version: 1.1
+#
+# Summary:
+#   Provides preset layers for pygame: a base erase layer that clears the screen
+#   and a frame art layer that draws a decorative frame and art from the current theme.
+#
+# Tags: art, base, erase, pygame
+
+from .pygame_scene_layer_base import SceneLayer
+from .where_pygame_themes_lives import CURRENT_THEME
+from .pygame_common import draw_screen_frame, _draw_art
+
+class BaseEraseLayer(SceneLayer):
+    def __init__(self, z_index=0):
+        super().__init__(name="base_erase_layer", z_index=z_index)
+
+    def draw(self, renderer, dt, context):
+        # In pygame, clear the screen by filling it with a background color (e.g., black).
+        screen = renderer.screen
+        screen.fill((0, 0, 0))
+
+class FrameArtLayer(SceneLayer):
+    def __init__(self, art_key, z_index=100, start_row=3, start_col=2):
+        super().__init__(name=f"frame_art_{art_key}", z_index=z_index)
+        self.art_key = art_key
+        self.start_row = start_row
+        self.start_col = start_col
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        draw_screen_frame(screen)
+        lines = CURRENT_THEME.get(self.art_key, [])
+        _draw_art(screen, lines, start_row=self.start_row, start_col=self.start_col)
+
+
+
+# File: pygame_menu_flow_manager.py
+# version: 4.9 (updated to pass full events to handle_input)
+#
+# Summary:
+#   High-level MenuFlowManager for main menu screens (HOME, SETTINGS, PLAY)
+#   using pygame. Global effect layers are automatically applied to every scene.
+#   Transitions between scenes are controlled solely by pygame_scene_transition.py.
+#
+# Tags: scene, menu, transition, pygame
+
+import pygame
+from .pygame_color_init import init_colors
+from .pygame_scene_home import HomeScene
+from .pygame_scene_settings import SettingsScene
+from .pygame_scene_load import LoadScene
+from .pygame_scene_game import GameScene
+from .pygame_scene_transition import run_transition
+from .pygame_scene_save import handle_post_game_scene_save
+from map_system.map_model_builder import build_model_common
+from map_system.mapgen.map_generator_pipeline import create_procedural_model
+from .pygame_game_renderer import PygameGameRenderer
+from .pygame_global_effects_manager import add_effect_layer
+from .pygame_effect_layers import SnowEffectLayer, RainEffectLayer
+
+class MenuFlowManager:
+    """
+    Manages the main menu screens using pygame.
+    Global effect layers are automatically applied to every scene.
+    Transitions between scenes are controlled solely by pygame_scene_transition.py.
+    """
+    def __init__(self, screen):
+        self.screen = screen
+        init_colors()
+        self.current_state = "HOME"
+        self.running = True
+
+        # Add global effect layers once.
+        add_effect_layer(SnowEffectLayer(num_flakes=10, color_name="white_on_black"))
+        add_effect_layer(RainEffectLayer(num_drops=10, color_name="blue_on_black", direction="down"))
+
+    def run_scene(self, scene):
+        """
+        Render the given scene in a loop until it returns a menu choice.
+        """
+        renderer = PygameGameRenderer(self.screen)
+        clock = pygame.time.Clock()
+        dt = 0
+
+        while True:
+            renderer.render_scene(scene, dt=dt, context=None)
+            pygame.display.flip()
+            dt += 1
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return None
+                elif event.type == pygame.VIDEORESIZE:
+                    # Recreate the screen as full screen and resizable.
+                    self.screen = pygame.display.set_mode(event.size, pygame.FULLSCREEN | pygame.RESIZABLE)
+                    from .pygame_utils import update_cell_sizes
+                    update_cell_sizes(self.screen)
+                elif event.type == pygame.KEYDOWN:
+                    # Pass the full event to handle_input (not just event.key)
+                    choice = scene.handle_input(event)
+                    if choice is not None:
+                        return choice
+
+            clock.tick(60)  # Limit to 60 FPS
+
+    def run_transition(self, current_scene, next_scene):
+        run_transition(self.screen, current_scene, next_scene)
+
+    def run(self):
+        """
+        Main loop to manage transitions between scenes.
+        """
+        while self.running:
+            if self.current_state == "HOME":
+                home_scene = HomeScene()
+                user_choice = self.run_scene(home_scene)
+                if not self.running:
+                    break
+
+                if user_choice == 1:  # Play selected
+                    load_scene = LoadScene()
+                    self.run_transition(home_scene, load_scene)
+                    self.current_state = "PLAY"
+                elif user_choice == 2:  # Settings selected
+                    settings_scene = SettingsScene()
+                    self.run_transition(home_scene, settings_scene)
+                    _ = self.run_scene(settings_scene)
+                    self.run_transition(settings_scene, home_scene)
+                    self.current_state = "HOME"
+                elif user_choice == 3:  # Quit selected
+                    self.current_state = "QUIT"
+
+            elif self.current_state == "PLAY":
+                load_scene = LoadScene()
+                selection = self.run_scene(load_scene)
+                if not self.running:
+                    break
+
+                if not selection:
+                    self.run_transition(load_scene, HomeScene())
+                    self.current_state = "HOME"
+                    continue
+
+                if selection == "GENERATE":
+                    model, context = create_procedural_model()
+                    if not model:
+                        self.current_state = "HOME"
+                        continue
+                    game_scene = GameScene(model, context)
+                    self.run_transition(load_scene, game_scene)
+                    _ = game_scene.run(self.screen)
+                    handle_post_game_scene_save(self.screen, model)
+                    continue
+
+                if isinstance(selection, dict):
+                    model, context = build_model_common(selection, is_generated=True, mode_name="play")
+                    if not model:
+                        self.current_state = "HOME"
+                        continue
+                    game_scene = GameScene(model, context)
+                    self.run_transition(load_scene, game_scene)
+                    _ = game_scene.run(self.screen)
+                    handle_post_game_scene_save(self.screen, model)
+                    continue
+
+                if isinstance(selection, str):
+                    model, context = build_model_common(selection, is_generated=False, mode_name="play")
+                    if not model:
+                        self.current_state = "HOME"
+                        continue
+                    game_scene = GameScene(model, context)
+                    self.run_transition(load_scene, game_scene)
+                    _ = game_scene.run(self.screen)
+                    handle_post_game_scene_save(self.screen, model)
+
+            elif self.current_state == "QUIT":
+                self.running = False
+
+
+# File: pygame_scene_base.py
+# version: 1.1
+#
+# Summary:
+#   Provides a base class for Scene objects that manage multiple SceneLayer plugins.
+#   The get_layers() method now returns the scene's own layers plus any globally enabled effect layers.
+#
+# Tags: scene, base, pygame
+
+from .pygame_global_effects_manager import get_effect_layers
+
+class Scene:
+    """
+    A Scene manages one or more SceneLayer objects.
+    """
+    def __init__(self):
+        self.layers = []  # Scene-specific layers
+
+    def get_layers(self):
+        """
+        Return the list of SceneLayer objects that should be drawn.
+        This includes the scene's own layers plus any global effect layers.
+        """
+        return self.layers + get_effect_layers()
+
+    def handle_input(self, key):
+        """
+        Optional: Scenes can process input themselves.
+        Return a new state, a choice, or None.
+        """
+        pass
+
+
+
+# File: pygame_scene_editor.py
+# version: 1.0
+#
+# Summary: Renders an overlay at the top of the screen when the editor is active,
+#          showing the currently selected scenery item and minimal controls.
+#
+# Tags: editor, overlay, ui
+
+from .pygame_utils import safe_addstr, get_color_attr
+from .where_pygame_themes_lives import CURRENT_THEME
+
+def draw_editor_overlay(screen, model):
+    """
+    Draw a small overlay at the top if the editor is active,
+    showing the currently selected item and short controls help.
+    """
+    if not model or not model.context.enable_editor_commands:
+        return
+    editor_list = model.editor_scenery_list
+    idx = model.editor_scenery_index
+    if not editor_list or idx < 0 or idx >= len(editor_list):
+        return
+    current_def_id = editor_list[idx][0]
+    overlay_text = (
+        f"[EDITOR MODE] Selected: {current_def_id}  "
+        "(p=place, x=remove top, l=next, k=prev, u=undo, e=exit editor)"
+    )
+    overlay_color = CURRENT_THEME["text_color"]
+    overlay_attr = get_color_attr(overlay_color)
+    
+    # In pygame, screen.get_size() returns (width, height)
+    max_w, max_h = screen.get_size()
+    
+    # For grid-based text layout, we assume safe_addstr converts grid (row, col)
+    # into pixel coordinates; here, we use a row of 1 and a column offset of 2.
+    row = 1
+    col = 2
+    # Create a blank line that spans nearly the entire width.
+    blank_line = " " * (max_w - 4)
+    
+    safe_addstr(screen, row, 1, blank_line, overlay_attr, clip_borders=False)
+    safe_addstr(screen, row, col, overlay_text, overlay_attr, clip_borders=False)
+
+
+
+# File: pygame_scene_game.py
+# version: 2.0 (refactored to plugin architecture)
+#
+# Summary:
+#   Defines a GameScene that encapsulates the game loop.
+#   This scene sets up the pygame‐based input and rendering,
+#   and then calls run_game_loop from engine.engine_main.
+#
+#   Note: Because the existing run_game_loop is a blocking call,
+#         the integration is not fully “non‑blocking” yet.
+#         In the future you might refactor engine_main.py to split updates
+#         and rendering into per‑frame steps.
+#
+# Tags: scene, game
+
+import pygame
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_game_renderer import PygameGameRenderer
+from .where_pygame_input_lives import PygameGameInput
+from engine.engine_main import run_game_loop
+
+class GameBackgroundLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="game_background", z_index=0)
+    
+    def draw(self, renderer, dt, context):
+        # Optionally add extra background effects here.
+        # For now, we leave this empty because run_game_loop handles full
+        # drawing of the game world.
+        pass
+
+class GameOverlayLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="game_overlay", z_index=100)
+    
+    def draw(self, renderer, dt, context):
+        # Here you could add HUD elements, inventory displays, or an editor overlay.
+        # For example, you might call a function such as:
+        #   from .pygame_scene_inventory import draw_inventory_summary
+        #   draw_inventory_summary(renderer.screen, context, row=1, col=2)
+        pass
+
+class GameScene(Scene):
+    def __init__(self, model, context):
+        super().__init__()
+        self.model = model
+        self.context = context
+        # Setup plugin layers (for future use) if you want to draw additional overlays.
+        self.background_layer = GameBackgroundLayer()
+        self.overlay_layer = GameOverlayLayer()
+        self.layers = [self.background_layer, self.overlay_layer]
+    
+    def run(self, screen):
+        """
+        Run the game scene. This method sets up input and rendering,
+        then calls the main game loop. (Currently, run_game_loop is blocking.)
+        """
+        # Setup the input and renderer as usual.
+        game_input = PygameGameInput()
+        game_renderer = PygameGameRenderer(screen)
+        
+        # (Optionally, before entering the game loop, you could draw your plugin layers.
+        #  For example:
+        #      for layer in self.get_layers():
+        #          layer.draw(game_renderer, dt=0, context=self.context)
+        #  to draw any static overlays.)
+        
+        # Delegate to the existing game loop.
+        run_game_loop(self.model, self.context, game_input, game_renderer)
+        
+        # After the game loop exits, return a value or perform cleanup if needed.
+        return "EXIT"
+
+    def handle_input(self, key):
+        # This method would be used if you want non-blocking input handling
+        # while in the game scene. Since run_game_loop is blocking, this is not used.
+        pass
+
+
+
+# FileName: pygame_scene_home.py
+# version: 1.3 (updated for layered approach with background art,
+#            full screen/resizable display, larger font, dynamic resizing,
+#            and edge-to-edge ASCII)
+# Summary: Defines HomeScene using plugin layers: a base erase layer, a background art layer,
+#          a menu layer, and a title layer. The background art is drawn using ASCII art from the theme.
+# Tags: scene, home, menu, pygame
+
+import pygame
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .where_pygame_themes_lives import CURRENT_THEME
+from .pygame_utils import safe_addstr, CELL_WIDTH, CELL_HEIGHT
+
+###############################################################################
+# BaseEraseLayer
+###############################################################################
+class PygameBaseEraseLayer(SceneLayer):
+    def __init__(self, z_index=0):
+        super().__init__(name="base_erase_layer", z_index=z_index)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.get_surface()
+        # Fill the entire screen with black.
+        screen.fill((0, 0, 0))
+
+
+###############################################################################
+# FrameArtLayer (Background Art)
+###############################################################################
+class PygameFrameArtLayer(SceneLayer):
+    def __init__(self, art_key="main_menu_art", z_index=100):
+        super().__init__(name=f"frame_art_{art_key}", z_index=z_index)
+        self.art_key = art_key
+        self.border_color = (0, 100, 200)
+        self.border_thickness = 4
+
+    def _draw_art(self, screen, art_lines, start_row=2, start_col=2):
+        """Draws a list of ASCII art lines onto the screen using safe_addstr."""
+        row = start_row
+        for line in art_lines:
+            # Draw each line if there is room.
+            safe_addstr(screen, row, start_col, line, (255, 255, 255), clip_borders=True)
+            row += 1
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.get_surface()
+        w, h = screen.get_size()
+        # Draw a border around the screen.
+        pygame.draw.rect(screen, self.border_color, (0, 0, w, h), self.border_thickness)
+        # Look up the art from the current theme.
+        art_lines = CURRENT_THEME.get(self.art_key, [])
+        if art_lines:
+            self._draw_art(screen, art_lines, start_row=2, start_col=2)
+
+
+###############################################################################
+# HomeTitleLayer
+###############################################################################
+class PygameHomeTitleLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="home_title", z_index=500)
+        self.font = pygame.font.SysFont("Arial", 40, bold=True)
+        self.title_text = "Welcome to RetroRPG!"
+        self.title_color = (0, 255, 0)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.get_surface()
+        text_surface = self.font.render(self.title_text, True, self.title_color)
+        screen.blit(text_surface, (50, 30))
+
+
+###############################################################################
+# HomeMenuLayer
+###############################################################################
+class PygameHomeMenuLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="home_menu", z_index=400)
+        self.menu_lines = [
+            "~~~~~~~~~",
+            "1) Play",
+            "2) Settings",
+            "3) Quit",
+            "~~~~~~~~~"
+        ]
+        self.current_select_slot = 0
+        self.font = pygame.font.SysFont("Arial", 24)
+        self.selected_color   = (255, 255, 0)
+        self.unselected_color = (200, 200, 200)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.get_surface()
+        w, h = screen.get_size()
+        line_height = 30
+        start_y = h - (len(self.menu_lines) * line_height) - 20
+        y = start_y
+
+        for i, text in enumerate(self.menu_lines):
+            if 1 <= i <= 3:
+                sel_index = i - 1
+                is_selected = (sel_index == self.current_select_slot)
+                color = self.selected_color if is_selected else self.unselected_color
+            else:
+                color = (150, 150, 150)
+            surf = self.font.render(text, True, color)
+            screen.blit(surf, (50, y))
+            y += line_height
+
+    def move_selection_up(self):
+        self.current_select_slot = max(0, self.current_select_slot - 1)
+
+    def move_selection_down(self):
+        self.current_select_slot = min(2, self.current_select_slot + 1)
+
+    def get_current_choice(self):
+        return self.current_select_slot + 1
+
+
+###############################################################################
+# Home Scene
+###############################################################################
+# NOTE: Renamed to HomeScene to match MenuFlowManager import expectations.
+class HomeScene(Scene):
+    def __init__(self):
+        super().__init__()
+        self.base_layer  = PygameBaseEraseLayer(z_index=0)
+        self.bg_layer    = PygameFrameArtLayer("main_menu_art", z_index=100)
+        self.menu_layer  = PygameHomeMenuLayer()
+        self.title_layer = PygameHomeTitleLayer()
+        self.layers = [
+            self.base_layer,
+            self.bg_layer,
+            self.menu_layer,
+            self.title_layer,
+        ]
+
+    def handle_input(self, event):
+        """
+        Expects a full pygame event.
+        """
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.menu_layer.move_selection_up()
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.menu_layer.move_selection_down()
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                return self.menu_layer.get_current_choice()
+            elif event.key == pygame.K_1:
+                return 1
+            elif event.key == pygame.K_2:
+                return 2
+            elif event.key == pygame.K_3:
+                return 3
+        return None
+
+###############################################################################
+# Helper function: run_pygame_home_screen
+###############################################################################
+def run_pygame_home_screen(renderer, game_input):
+    """
+    Runs the home screen loop with dynamic resizing, full screen, and edge-to-edge ASCII.
+    """
+    clock = pygame.time.Clock()
+    scene = HomeScene()
+    running = True
+
+    while running:
+        events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.QUIT:
+                running = False
+                break
+            elif event.type == pygame.VIDEORESIZE:
+                # Recreate display with new size in full screen and resizable mode.
+                renderer.screen = pygame.display.set_mode(event.size, pygame.FULLSCREEN | pygame.RESIZABLE)
+                # Update global font and cell sizes.
+                from .pygame_utils import update_cell_sizes
+                update_cell_sizes(renderer.screen)
+            # Pass the full event to the scene's input handler.
+            choice = scene.handle_input(event)
+            if choice is not None:
+                print(f"User selected choice = {choice}")
+                if choice == 3:
+                    running = False
+                else:
+                    # Handle other choices (e.g., transition to a different scene).
+                    pass
+
+        dt = clock.get_time()
+        scene.draw(renderer, dt, context=None)
+        pygame.display.flip()
+        clock.tick(30)
+
+
+# File: pygame_scene_inventory.py
+# version: 1.1 (added draw_inventory_summary to unify inventory display)
+#
+# Summary:
+#   Dedicated functions to display the player's inventory—either a brief summary
+#   (for in-game overlays) or a full inventory screen that waits for a key press.
+#
+# Tags: pygame, ui, inventory
+
+import pygame
+from .pygame_common import draw_screen_frame, draw_title, draw_instructions
+from .pygame_utils import safe_addstr, get_color_attr
+from .where_pygame_themes_lives import CURRENT_THEME
+
+
+def draw_inventory_summary(screen, model, row=1, col=2):
+    """
+    Draws a single-line summary of the player's inventory.
+    Called by the main renderer when not in editor mode.
+    """
+    text_color = CURRENT_THEME["text_color"]
+    text_attr = get_color_attr(text_color)
+    inv_text = (
+        f"Inventory: Gold={model.player.gold}, "
+        f"Wood={model.player.wood}, Stone={model.player.stone}"
+    )
+    safe_addstr(screen, row, col, inv_text, text_attr, clip_borders=True)
+
+
+def show_inventory_screen(screen, model):
+    """
+    Shows the player's current inventory in a separate, blocking screen.
+    Waits for any key to be pressed before returning.
+    """
+    screen.fill((0, 0, 0))
+    draw_screen_frame(screen)
+    draw_title(screen, "Inventory", row=1)
+
+    inventory_lines = [
+        f"  Gold  = {model.player.gold}",
+        f"  Wood  = {model.player.wood}",
+        f"  Stone = {model.player.stone}"
+    ]
+
+    text_color = CURRENT_THEME["text_color"]
+    text_attr = get_color_attr(text_color)
+
+    row = 3
+    for line in inventory_lines:
+        safe_addstr(screen, row, 2, line, text_attr, clip_borders=True)
+        row += 1
+
+    instructions = ["Press any key to return..."]
+    draw_instructions(screen, instructions, from_bottom=2)
+    pygame.display.flip()
+
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                waiting = False
+
+
+
+# File: pygame_scene_layer_base.py
+# version: 1.0
+#
+# Summary:
+#   Provides the base class for scene layers (plugin objects that know how to draw)
+#   in pygame. Each layer has a name, a z_index, and a .draw(renderer, dt, context) method.
+#
+# Tags: scene, layer, base, pygame
+
+class SceneLayer:
+    """
+    Base class for 'layer plugins'. Each layer knows:
+      - self.name: a string identifying the layer.
+      - self.z_index: an integer controlling draw order.
+      - a .draw(renderer, dt, context) method to perform drawing.
+    """
+    def __init__(self, name, z_index=0):
+        self.name = name
+        self.z_index = z_index
+
+    def draw(self, renderer, dt, context):
+        """
+        Subclasses should override this method.
+        :param renderer: instance of your renderer (e.g., PygameGameRenderer)
+        :param dt: a time delta or frame count for animations
+        :param context: a game model or dictionary of data
+        """
+        pass
+
+
+
+# File: pygame_scene_load.py
+# version: 2.4 (updated for robust event handling)
+#
+# Summary:
+#   Defines LoadScene – a plugin‑based scene for loading or generating a map.
+#   The scene uses layered drawing:
+#       - Base background (lowest) for clearing/filling the screen.
+#       - Background art (frame and theme art) above the base.
+#       - Global effects (if any) from the global effects manager.
+#       - Map list (z_index=400)
+#       - Header (title and instructions, z_index=500)
+#
+# Tags: map, load, scene
+
+import pygame
+import tools.debug as debug
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_common import draw_title, draw_instructions
+from .where_pygame_themes_lives import CURRENT_THEME
+from .pygame_utils import safe_addstr, get_color_attr
+from .pygame_selector_highlight import draw_global_selector_line
+
+from map_system.map_list_logic import get_map_list, delete_map_file
+
+class LoadHeaderLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="load_header", z_index=500)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        draw_title(screen, "Load Map", row=1)
+        instructions = [
+            "↑/↓ = select, ENTER = load, 'd' = del, 'q' = back, 'v' = dbg"
+        ]
+        draw_instructions(screen, instructions, from_bottom=3)
+
+class LoadMenuLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="load_menu", z_index=400)
+        self.options = ["Generate a new map"]
+        maps = get_map_list(extension=".json")
+        self.options.extend(maps)
+        self.current_index = 0
+        self.frame_count = 0
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        max_w, max_h = screen.get_size()  # (width, height)
+        row = 10  # Start drawing options at grid row 10.
+        for i, option in enumerate(self.options):
+            display_text = option if i == 0 else f"{i}) {option}"
+            is_selected = (i == self.current_index)
+            draw_global_selector_line(
+                screen,
+                row,
+                f"> {display_text}" if is_selected else f"  {display_text}",
+                is_selected=is_selected,
+                frame=self.frame_count
+            )
+            row += 1
+        self.frame_count += 1
+
+    def handle_key(self, key):
+        if key in (pygame.K_UP, pygame.K_w):
+            self.current_index = max(0, self.current_index - 1)
+        elif key in (pygame.K_DOWN, pygame.K_s):
+            self.current_index = min(len(self.options) - 1, self.current_index + 1)
+        elif key in (pygame.K_RETURN, pygame.K_SPACE):
+            if self.current_index == 0:
+                return "GENERATE"
+            else:
+                return self.options[self.current_index]
+        elif key in (pygame.K_q, pygame.K_ESCAPE):
+            return ""  # Cancel and return to main menu.
+        elif key == pygame.K_v:
+            debug.toggle_debug()
+        elif key == pygame.K_d:
+            if self.current_index > 0:
+                to_delete = self.options[self.current_index]
+                confirm = prompt_delete_confirmation(to_delete)
+                if confirm:
+                    success = delete_map_file(to_delete)
+                    if success:
+                        del self.options[self.current_index]
+                        if self.current_index >= len(self.options):
+                            self.current_index = len(self.options) - 1
+        # Legacy code (deprecated): comparing event.key values:
+        # elif pygame.K_0 <= key <= pygame.K_9:
+        elif key >= pygame.K_0 and key <= pygame.K_9:
+            typed = key - pygame.K_0
+            if 0 <= typed < len(self.options):
+                self.current_index = typed
+        return None
+
+class LoadScene(Scene):
+    def __init__(self):
+        super().__init__()
+        from .pygame_layer_presets import BaseEraseLayer, FrameArtLayer
+        self.base_layer = BaseEraseLayer()
+        self.bg_layer = FrameArtLayer("crocodile_art", z_index=100)
+        self.menu_layer = LoadMenuLayer()
+        self.header_layer = LoadHeaderLayer()
+        self.layers = [self.base_layer, self.bg_layer, self.menu_layer, self.header_layer]
+
+    def handle_input(self, event):
+        """
+        Updated to accept a full pygame event. If the event is KEYDOWN,
+        pass event.key to the menu_layer handler.
+        """
+        if event.type == pygame.KEYDOWN:
+            result = self.menu_layer.handle_key(event.key)
+            if result is not None:
+                return result
+        return None
+
+def prompt_delete_confirmation(filename):
+    """
+    Displays a confirmation prompt for deleting a map.
+    Returns True if confirmed, False otherwise.
+    """
+    screen = pygame.display.get_surface()
+    max_w, max_h = screen.get_size()
+    question = f"Delete '{filename}'? (y/n)"
+    attr = get_color_attr(CURRENT_THEME["confirmation_color"])
+
+    # Use safe_addstr to draw the prompt.
+    from .pygame_utils import CELL_WIDTH, CELL_HEIGHT  # and DEFAULT_FONT if needed
+    grid_cols = max_w // CELL_WIDTH
+    grid_rows = max_h // CELL_HEIGHT
+    row = grid_rows - 2
+    blank_line = " " * (grid_cols - 4)
+    safe_addstr(screen, row, 2, blank_line, attr, clip_borders=False)
+    safe_addstr(screen, row, 2, question, attr, clip_borders=False)
+    pygame.display.flip()
+
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    return True
+                elif event.key in (pygame.K_n, pygame.K_q, pygame.K_ESCAPE):
+                    return False
+
+
+# File: pygame_scene_save.py
+# version: 2.0 (updated to use shared layers)
+#
+# Summary:
+#   Contains all save‑scene UI flows for picking/creating filenames, prompting for overwrites,
+#   and calling the logic to store map data.
+#
+# Tags: map, save, scene
+
+import pygame
+import tools.debug as debug
+from map_system.map_list_logic import get_map_list
+from .pygame_utils import safe_addstr, get_color_attr
+from .pygame_common import draw_title, draw_instructions
+from .where_pygame_themes_lives import CURRENT_THEME
+from map_system.scene_save_logic import (
+    save_player_data,
+    does_file_exist_in_maps_dir,
+    build_and_save_map,
+    update_player_coords_in_map
+)
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_game_renderer import PygameGameRenderer
+
+
+class SaveHeaderLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="save_header", z_index=500)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        draw_title(screen, "Save Map", row=1)
+        instructions = ["Select a map to overwrite, 'n' for new, ENTER to cancel, 'v' toggles debug"]
+        draw_instructions(screen, instructions, from_bottom=3)
+
+
+class SaveMenuLayer(SceneLayer):
+    def __init__(self, files):
+        super().__init__(name="save_menu", z_index=400)
+        self.files = files
+        self.current_index = 0
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        max_w, max_h = screen.get_size()
+        row = 10
+        attr_prompt = get_color_attr(CURRENT_THEME["prompt_color"])
+        attr_menu_item = get_color_attr(CURRENT_THEME["menu_item_color"])
+        if self.files:
+            safe_addstr(screen, row, 2, "Maps (pick number to overwrite) or 'n' for new, or ENTER to cancel:", attr_prompt, clip_borders=True)
+            row += 1
+            for i, filename in enumerate(self.files, start=1):
+                indicator = ">" if (i - 1) == self.current_index else " "
+                safe_addstr(screen, row, 2, f"{indicator} {i}. {filename}", attr_menu_item, clip_borders=True)
+                row += 1
+            safe_addstr(screen, row, 2, "Enter choice or press ENTER to cancel:", attr_prompt, clip_borders=True)
+        else:
+            safe_addstr(screen, row, 2, "No existing maps. Press 'n' for new, 'v' toggles debug, or ENTER to cancel:", attr_prompt, clip_borders=True)
+
+    def handle_key(self, key):
+        if key in (pygame.K_UP, pygame.K_w):
+            self.current_index = max(0, self.current_index - 1)
+        elif key in (pygame.K_DOWN, pygame.K_s):
+            self.current_index = min(len(self.files) - 1, self.current_index + 1)
+        elif key in (pygame.K_RETURN, pygame.K_SPACE):
+            if self.files:
+                return self.files[self.current_index]
+            else:
+                return ""
+        elif key in (pygame.K_n,):
+            return "NEW_FILE"
+        elif key in (pygame.K_v,):
+            debug.toggle_debug()
+        elif pygame.K_0 <= key <= pygame.K_9:
+            digit = key - pygame.K_0
+            if 1 <= digit <= len(self.files):
+                return self.files[digit - 1]
+        return None
+
+
+class SaveScene(Scene):
+    """
+    Plugin-based scene for saving maps.
+    Returns a filename (string) if an existing file is selected,
+    "NEW_FILE" if the user chooses to create a new file,
+    or an empty string if cancelled.
+    """
+    def __init__(self):
+        super().__init__()
+        files = get_map_list(extension=".json")
+        from .pygame_layer_presets import BaseEraseLayer, FrameArtLayer
+        self.base_layer = BaseEraseLayer()
+        self.background_layer = FrameArtLayer("crocodile_art", z_index=100)
+        self.menu_layer = SaveMenuLayer(files)
+        self.header_layer = SaveHeaderLayer()
+        self.layers = [self.base_layer, self.background_layer, self.menu_layer, self.header_layer]
+
+    def handle_input(self, key):
+        result = self.menu_layer.handle_key(key)
+        if result is not None:
+            return result
+        return None
+
+
+def run_save_scene(screen):
+    renderer = PygameGameRenderer(screen)
+    dt = 0
+    save_scene = SaveScene()
+    while True:
+        renderer.render_scene(save_scene, dt=dt, context=None)
+        dt += 1
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                result = save_scene.handle_input(event.key)
+                if result is not None:
+                    return result
+
+
+def prompt_for_filename(screen, prompt):
+    """
+    Displays a prompt on screen and collects a string from the user.
+    This is a simple blocking text input loop.
+    """
+    renderer = PygameGameRenderer(screen)
+    row = 10
+    attr = get_color_attr(CURRENT_THEME["prompt_color"])
+    input_str = ""
+    done = False
+
+    while not done:
+        # Clear the input line.
+        safe_addstr(screen, row, 2, " " * 50, attr, clip_borders=True)
+        # Render the prompt along with the current input.
+        safe_addstr(screen, row, 2, prompt + " " + input_str, attr, clip_borders=True)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    done = True
+                    break
+                elif event.key == pygame.K_BACKSPACE:
+                    input_str = input_str[:-1]
+                else:
+                    # Append the character (use event.unicode for proper character).
+                    input_str += event.unicode
+    return input_str.strip()
+
+
+def _restore_input_mode(screen):
+    # In pygame, no special restoration is required.
+    pass
+
+
+def save_map_ui(screen, placed_scenery, player=None, world_width=100, world_height=100,
+                filename_override=None, notify_overwrite=False):
+    if filename_override:
+        filename = filename_override
+    else:
+        overwrite_or_new = run_save_scene(screen)
+        if not overwrite_or_new:
+            return
+        if overwrite_or_new == "NEW_FILE":
+            filename = prompt_for_filename(screen, "Enter filename to save as:")
+            if not filename:
+                return
+            if not filename.endswith(".json"):
+                filename += ".json"
+        else:
+            filename = overwrite_or_new
+
+    file_existed = does_file_exist_in_maps_dir(filename)
+    build_and_save_map(filename, placed_scenery, player, world_width, world_height)
+    if file_existed and notify_overwrite:
+        pygame.time.delay(0)
+    # NOTE: Transition back to HomeScene is now handled by the MenuFlowManager.
+
+
+def prompt_yes_no(screen, question):
+    """
+    Displays a yes/no question and waits for a key press.
+    Returns True if the user presses 'y' (or 'Y'), else False.
+    """
+    renderer = PygameGameRenderer(screen)
+    # For simplicity, draw the question near the bottom.
+    width, height = screen.get_size()
+    row = height // 20  # Adjust as needed for your grid.
+    col = 2
+    blank_line = " " * 50
+    safe_addstr(screen, row, col, blank_line, get_color_attr("white_on_black"), clip_borders=True)
+    safe_addstr(screen, row, col, question, get_color_attr("white_on_black"), clip_borders=True)
+    pygame.display.flip()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    return True
+                else:
+                    return False
+
+
+def handle_post_game_scene_save(screen, model):
+    """
+    Called after the player returns from the game scene.
+    Determines whether to save a new map or update an existing one,
+    then calls the save UI flow.
+    """
+    save_player_data(model.player)
+    if model.loaded_map_filename is None:
+        wants_save = prompt_yes_no(screen, "Save new map? (y/n)")
+        if wants_save:
+            placed_scenery = getattr(model, 'placed_scenery', {})
+            w = getattr(model, 'world_width', 100)
+            h = getattr(model, 'world_height', 100)
+            save_map_ui(screen,
+                        placed_scenery=placed_scenery,
+                        player=model.player,
+                        world_width=w,
+                        world_height=h,
+                        filename_override=None,
+                        notify_overwrite=False)
+    else:
+        update_player_coords_in_map(model.loaded_map_filename, model.player.x, model.player.y)
+        placed_scenery = getattr(model, 'placed_scenery', {})
+        w = getattr(model, 'world_width', 100)
+        h = getattr(model, 'world_height', 100)
+        save_map_ui(screen,
+                    placed_scenery=placed_scenery,
+                    player=model.player,
+                    world_width=w,
+                    world_height=h,
+                    filename_override=model.loaded_map_filename,
+                    notify_overwrite=False)
+
+
+def perform_quick_save(model, renderer):
+    if not renderer:
+        return
+    screen = renderer.get_pygame_screen()
+    if not screen:
+        return
+    player = model.player
+    if model.loaded_map_filename:
+        save_map_ui(screen,
+                    model.placed_scenery,
+                    player=player,
+                    world_width=model.world_width,
+                    world_height=model.world_height,
+                    filename_override=model.loaded_map_filename)
+    else:
+        save_map_ui(screen,
+                    model.placed_scenery,
+                    player=player,
+                    world_width=model.world_width,
+                    world_height=model.world_height,
+                    filename_override=None)
+    model.full_redraw_needed = True
+
+
+
+# File: pygame_scene_settings.py
+# version: 2.4 (updated to use shared layers and standardized text colors)
+#
+# Summary:
+#   Defines the SettingsScene using plugin layers.
+#   The scene uses layered drawing:
+#       - Base background (lowest) for clearing/filling the screen.
+#       - Background art (using shared art drawing) above the base.
+#       - Global effects (if any) from the global effects manager.
+#       - Menu (z_index=400) and Title (z_index=500) on top.
+#
+# Tags: scene, settings
+
+import pygame
+import tools.debug as debug
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_common import draw_title
+from .pygame_selector_highlight import draw_global_selector_line
+
+class SettingsTitleLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="settings_title", z_index=500)
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        draw_title(screen, "Settings (Placeholder)", row=1)
+
+class SettingsMenuLayer(SceneLayer):
+    def __init__(self):
+        super().__init__(name="settings_menu", z_index=400)
+        self.menu_lines = [
+            "1) Toggle Debug",
+            "2) Return"
+        ]
+        self.current_select_slot = 0
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        max_w, max_h = screen.get_size()
+        start_row = 4
+        row = start_row
+        for i, line in enumerate(self.menu_lines):
+            is_selected = (i == self.current_select_slot)
+            draw_global_selector_line(
+                screen, row, line,
+                is_selected=is_selected,
+                frame=dt  # Use dt as the frame count for animation effects.
+            )
+            row += 1
+
+    def handle_key(self, key):
+        if key == pygame.K_v:
+            debug.toggle_debug()
+        if key in (pygame.K_UP, pygame.K_w):
+            self.current_select_slot = max(0, self.current_select_slot - 1)
+        elif key in (pygame.K_DOWN, pygame.K_s):
+            self.current_select_slot = min(len(self.menu_lines) - 1, self.current_select_slot + 1)
+        elif key in (pygame.K_RETURN, pygame.K_SPACE):
+            if self.current_select_slot == 0:
+                debug.toggle_debug()
+                return None
+            elif self.current_select_slot == 1:
+                return "QUIT"
+        return None
+
+class SettingsScene(Scene):
+    def __init__(self):
+        super().__init__()
+        from .pygame_layer_presets import BaseEraseLayer, FrameArtLayer
+        self.base_layer = BaseEraseLayer()
+        self.background_layer = FrameArtLayer("crocodile_art", z_index=100)
+        self.menu_layer = SettingsMenuLayer()
+        self.title_layer = SettingsTitleLayer()
+        self.layers = [self.base_layer, self.background_layer, self.menu_layer, self.title_layer]
+
+    def handle_input(self, key):
+        result = self.menu_layer.handle_key(key)
+        if result is not None:
+            return result
+        if key in (pygame.K_q, pygame.K_ESCAPE):
+            return "QUIT"
+        return None
+
+
+
+# File: pygame_scene_transition.py
+# version: 1.1
+#
+# Summary:
+#   Provides a CrossFadeTransitionScene that smoothly blends from one scene to another
+#   using an overlaid rain effect. Also contains a helper function (run_transition)
+#   that runs the transition based on a centralized configuration (TRANSITION_CONFIG).
+#
+# Tags: transition, scene, effects, helper
+
+import pygame
+import random
+from .pygame_scene_base import Scene
+from .pygame_scene_layer_base import SceneLayer
+from .pygame_common import draw_inside_frame_ch
+from .pygame_utils import get_color_attr
+
+# Global configuration for transitions.
+TRANSITION_CONFIG = {
+    "enabled": True,             # Set to False to disable transitions.
+    "effect": "crossfade",       # Currently, only "crossfade" is implemented.
+    "phase1_duration": 150,      # Duration (in dt units) for Phase 1 (rain increases over current scene).
+    "phase2_duration": 150,      # Duration for Phase 2 (rain fades over next scene).
+    "dt_increment": 10,          # Time increment (dt) per frame.
+    "napms": 10,                 # Delay (in ms) between frames.
+    "color": "blue_on_black",    # Color for the rain effect.
+}
+
+
+class CrossFadeBackgroundLayer(SceneLayer):
+    """
+    Renders the background for the transition.
+    For dt < phase1_duration, it draws the entire current scene;
+    for dt ≥ phase1_duration, it draws the entire next scene.
+    """
+    def __init__(self, current_scene, next_scene, phase1_duration, phase2_duration):
+        super().__init__(name="crossfade_background", z_index=100)
+        self.current_scene = current_scene
+        self.next_scene = next_scene
+        self.phase1_duration = phase1_duration
+        self.phase2_duration = phase2_duration
+
+    def draw(self, renderer, dt, context):
+        # In Phase 1, draw the current scene; after that, draw the next scene.
+        if dt < self.phase1_duration:
+            for layer in self.current_scene.layers:
+                layer.draw(renderer, dt, context)
+        else:
+            for layer in self.next_scene.layers:
+                layer.draw(renderer, dt, context)
+
+
+class CrossFadeRainLayer(SceneLayer):
+    """
+    Overlays a rain effect whose density varies with dt.
+    In Phase 1, density increases linearly from 0 to max_drops;
+    in Phase 2, density decreases linearly from max_drops to 0.
+    """
+    def __init__(self, max_drops=100, color_name="blue_on_black", phase1_duration=500, phase2_duration=500):
+        super().__init__(name="crossfade_rain", z_index=600)
+        self.max_drops = max_drops
+        self.color_name = color_name
+        self.phase1_duration = phase1_duration
+        self.phase2_duration = phase2_duration
+
+    def _generate_raindrops(self, screen, num_drops):
+        # Assume screen.get_size() returns (width, height) in grid units.
+        width, height = screen.get_size()
+        drops = []
+        for _ in range(num_drops):
+            # Ensure drops appear inside the frame (avoid borders).
+            x = random.randint(1, width - 2)
+            y = random.randint(1, height - 2)
+            drops.append({"x": x, "y": y})
+        return drops
+
+    def draw(self, renderer, dt, context):
+        screen = renderer.screen
+        if dt < self.phase1_duration:
+            density_factor = dt / self.phase1_duration
+        else:
+            phase2_dt = dt - self.phase1_duration
+            density_factor = max(0, 1 - (phase2_dt / self.phase2_duration))
+        num_drops = int(self.max_drops * density_factor)
+        drops = self._generate_raindrops(screen, num_drops)
+        attr = get_color_attr(self.color_name)
+        for drop in drops:
+            # Draw a rain drop (here represented by a vertical bar).
+            try:
+                ch = '|'
+                draw_inside_frame_ch(screen, drop["y"], drop["x"], ch, attr)
+            except Exception:
+                # In pygame, drawing errors are less common.
+                pass
+
+
+class CrossFadeTransitionScene(Scene):
+    """
+    A scene that performs a cross-fade transition between two scenes using a rain overlay.
+    The transition is complete when dt >= (phase1_duration + phase2_duration).
+    """
+    def __init__(self, current_scene, next_scene, phase_duration=(500, 500)):
+        super().__init__()
+        self.current_scene = current_scene
+        self.next_scene = next_scene
+        self.phase1_duration, self.phase2_duration = phase_duration
+        self.frame_count = 0  # Updated externally via run_transition.
+        self.background_layer = CrossFadeBackgroundLayer(current_scene, next_scene,
+                                                           self.phase1_duration, self.phase2_duration)
+        self.rain_layer = CrossFadeRainLayer(max_drops=100,
+                                             color_name=TRANSITION_CONFIG["color"],
+                                             phase1_duration=self.phase1_duration,
+                                             phase2_duration=self.phase2_duration)
+        self.layers = [self.background_layer, self.rain_layer]
+
+    def handle_input(self, key):
+        # Ignore user input during transition.
+        return None
+
+    def is_complete(self):
+        total_duration = self.phase1_duration + self.phase2_duration
+        return self.frame_count >= total_duration
+
+
+def run_transition(screen, current_scene, next_scene):
+    """
+    Runs a transition from current_scene to next_scene based on the global TRANSITION_CONFIG.
+    This helper handles all timing, color, effect type, and enabling/disabling.
+    Modify TRANSITION_CONFIG here to change the transition globally.
+    """
+    if not TRANSITION_CONFIG.get("enabled", True):
+        return
+    phase1 = TRANSITION_CONFIG.get("phase1_duration", 500)
+    phase2 = TRANSITION_CONFIG.get("phase2_duration", 500)
+    dt_increment = TRANSITION_CONFIG.get("dt_increment", 10)
+    napms_delay = TRANSITION_CONFIG.get("napms", 10)
+    # Currently, only "crossfade" is implemented.
+    from .pygame_game_renderer import PygameGameRenderer
+    transition_scene = CrossFadeTransitionScene(current_scene, next_scene,
+                                                  phase_duration=(phase1, phase2))
+    # Update rain color from configuration.
+    transition_scene.rain_layer.color_name = TRANSITION_CONFIG.get("color", "blue_on_black")
+    renderer = PygameGameRenderer(screen)
+    dt = 0
+    while not transition_scene.is_complete():
+        renderer.render_scene(transition_scene, dt=dt, context=None)
+        dt += dt_increment
+        pygame.time.delay(napms_delay)
+        transition_scene.frame_count = dt
+
+
+
+# File: pygame_selector_highlight.py
+# version: 1.4
+#
+# Summary: Provides a single, globally configurable highlight/selector system for pygame.
+#          This mimics the curses version by modifying colors for selected text.
+#
+# Tags: selector, highlight, effects, pygame
+
+import pygame
+from .pygame_utils import safe_addstr, get_color_attr
+from .where_pygame_themes_lives import CURRENT_THEME
+
+GLOBAL_HIGHLIGHT_CONFIG = {
+    # These are set to None so that CURRENT_THEME values will be used at runtime.
+    "selected_color_name":   None,
+    "unselected_color_name": None,
+    "effect_name":           "REVERSE_BLINK",
+    "speed_factor":          5,
+}
+
+def get_global_selector_config():
+    """
+    Returns the global highlight config, filling in selected/unselected
+    color names from CURRENT_THEME if they are None.
+    """
+    config = GLOBAL_HIGHLIGHT_CONFIG.copy()
+    if config["selected_color_name"] is None:
+        config["selected_color_name"] = CURRENT_THEME["highlight_selected_color"]
+    if config["unselected_color_name"] is None:
+        config["unselected_color_name"] = CURRENT_THEME["highlight_unselected_color"]
+    return config
+
+def invert_color(color):
+    """
+    Inverts an RGB color.
+    """
+    return (255 - color[0], 255 - color[1], 255 - color[2])
+
+def get_selector_effect_color(effect="REVERSE_BLINK", base_color=(255, 255, 255), frame=0, speed_factor=10):
+    """
+    Mimics selector effect attributes by modifying the base_color.
+    For some effects, the color will alternate between the base color and its inversion.
+    """
+    toggle_state = (frame // speed_factor) % 2
+    if effect == "NONE":
+        return base_color
+    elif effect == "REVERSE":
+        return invert_color(base_color)
+    elif effect == "BLINK":
+        # Blink effect could alternate with no effect; here we simply return base_color.
+        return base_color
+    elif effect == "REVERSE_BLINK":
+        return invert_color(base_color) if toggle_state else base_color
+    elif effect == "FLASH":
+        return invert_color(base_color) if toggle_state == 0 else base_color
+    elif effect == "GLOW":
+        return base_color  # Glow effect not implemented
+    elif effect == "SHIMMER":
+        return invert_color(base_color) if toggle_state == 0 else base_color
+    return base_color
+
+def draw_global_selector_line(screen, row: int, text: str, is_selected: bool=False, frame: int=0) -> None:
+    """
+    Draws a text line at a given row using the global selector config.
+    When selected, the text color is modified by the specified effect.
+    """
+    config = get_global_selector_config()
+    selected_color_name   = config["selected_color_name"]
+    unselected_color_name = config["unselected_color_name"]
+    effect_name           = config["effect_name"]
+    speed_factor          = config["speed_factor"]
+
+    if is_selected:
+        base_color = get_color_attr(selected_color_name)
+        modified_color = get_selector_effect_color(effect=effect_name, base_color=base_color,
+                                                   frame=frame, speed_factor=speed_factor)
+    else:
+        modified_color = get_color_attr(unselected_color_name)
+
+    safe_addstr(screen, row, 2, text, modified_color)
+
+
+
+# File: pygame_tile_drawing.py
+# version: 1.2 (refactored to remove layer_for_def_id usage in rendering)
+#
+# Summary:
+#   Contains common tile-drawing logic for the pygame UI. Moved here from
+#   the renderer to allow a cleaner separation of responsibilities.
+#
+# ChangeLog:
+#   v1.1:  - Added `compose_fg_with_floor_bg` helper to remove repeated code.
+#          - Updated `draw_single_tile` & `draw_player_on_top` to use helper.
+#   v1.2:  - Now draws floor plus other layers from layer_manager.get_layers_in_draw_order().
+#          - The old code referencing layer_for_def_id is commented out.
+#
+# Tags: pygame, ui, rendering
+
+from .pygame_utils import safe_addch, parse_two_color_names
+from .pygame_selector_highlight import get_color_attr
+
+# We still need ALL_SCENERY_DEFS for character and color lookups.
+from scenery.scenery_manager import ALL_SCENERY_DEFS
+
+# Import the layer order helper so we can draw in ascending z-index.
+from scenery.layer_manager import get_layers_in_draw_order
+
+def compose_fg_with_floor_bg(floor_color_name, fg_object_color_name):
+    """
+    Given a floor color name (e.g. "white_on_black") and an object's
+    foreground color name (e.g. "red_on_black"), combine them so that:
+      - The object's foreground remains the same,
+      - The background becomes whatever the floor's background was.
+    Returns a pygame color attribute (an RGB tuple).
+    """
+    fg_floor, bg_floor = parse_two_color_names(floor_color_name)
+    fg_obj, _ = parse_two_color_names(fg_object_color_name)
+    final_color_name = f"{fg_obj}_on_{bg_floor}"
+    return get_color_attr(final_color_name)
+
+def draw_single_tile(screen, wx, wy, sx, sy, model, blank_attr):
+    """
+    Draw the background/floor plus any objects, items, or entities for tile (wx, wy).
+    Painted at screen coordinates (sx, sy). The player is NOT drawn here; that is handled
+    separately to ensure the player remains above (or below) certain objects.
+    """
+
+    # Erase any leftover character first.
+    safe_addch(screen, sy, sx, " ", blank_attr, clip_borders=True)
+
+    tile_dict = model.placed_scenery.get((wx, wy), None)
+    if not tile_dict:
+        return  # nothing to draw
+
+    # NEW: multi-layer drawing approach
+    # 1) Draw the floor first.
+    floor_obj = tile_dict.get("floor")
+    floor_color_name = "white_on_black"
+
+    if floor_obj:
+        fdef = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+        ch_floor = fdef.get("ascii_char", floor_obj.char)
+        floor_color_name = fdef.get("color_name", "white_on_black")
+        floor_attr = get_color_attr(floor_color_name)
+        safe_addch(screen, sy, sx, ch_floor, floor_attr, clip_borders=True)
+
+    # 2) Draw every other layer in ascending z‐order,
+    #    skipping "floor" because we already drew it above.
+    layers_in_order = get_layers_in_draw_order()
+    for layer_name in layers_in_order:
+        if layer_name == "floor":
+            continue  # already handled
+
+        # tile_dict might have, for example, tile_dict["objects"] = [...]
+        layer_contents = tile_dict.get(layer_name, [])
+        if not isinstance(layer_contents, list):
+            # It's not a list (e.g. None or some legacy value); skip it.
+            continue
+
+        for obj in layer_contents:
+            info = ALL_SCENERY_DEFS.get(obj.definition_id, {})
+            ch_obj = info.get("ascii_char", obj.char)
+            obj_color_name = info.get("color_name", "white_on_black")
+
+            # Compose the object's foreground with the floor's background.
+            obj_attr = compose_fg_with_floor_bg(floor_color_name, obj_color_name)
+            safe_addch(screen, sy, sx, ch_obj, obj_attr, clip_borders=True)
+
+def draw_player_on_top(screen, model, map_top_offset):
+    """
+    Draw the player above everything, but allow certain objects (e.g. TreeTop)
+    to render last (so they can obscure the player if desired).
+    """
+    px = model.player.x - model.camera_x
+    py = model.player.y - model.camera_y + map_top_offset
+    width, height = screen.get_size()
+
+    if not (0 <= px < width and 0 <= py < height):
+        return  # The player is off-screen
+
+    tile_dict = model.placed_scenery.get((model.player.x, model.player.y), {})
+    # Determine the floor color for background merging.
+    floor_obj = tile_dict.get("floor")
+    floor_color_name = "white_on_black"
+    if floor_obj:
+        fdef = ALL_SCENERY_DEFS.get(floor_obj.definition_id, {})
+        floor_color_name = fdef.get("color_name", "white_on_black")
+
+    # Draw the player using the floor's background color.
+    player_fg = getattr(model.player, "color_name", "white")  # e.g. "cyan"
+    player_char = getattr(model.player, "char", "@")           # e.g. '@'
+
+    player_attr = compose_fg_with_floor_bg(floor_color_name, player_fg)
+    safe_addch(screen, py, px, player_char, player_attr, clip_borders=True)
+
+    # If you have certain objects that should obscure the player (like "TreeTop"),
+    # gather them from the "objects" or "overhead" layer.
+    trunk_tops = []
+    from_layers = get_layers_in_draw_order()
+    # Skip "floor" since it doesn't contain lists. Check other layers such as "objects" or "overhead".
+    for layer_name in from_layers:
+        if layer_name == "floor":
+            continue
+        maybe_list = tile_dict.get(layer_name, [])
+        if isinstance(maybe_list, list):
+            for obj in maybe_list:
+                if obj.definition_id in ("TreeTop", "TreeTrunk"):
+                    trunk_tops.append(obj)
+
+    # Re-draw those trunk/tops last, so they appear over the player.
+    for t_obj in trunk_tops:
+        info = ALL_SCENERY_DEFS.get(t_obj.definition_id, {})
+        ch = info.get("ascii_char", t_obj.char)
+        top_color = info.get("color_name", "white_on_black")
+        trunk_attr = compose_fg_with_floor_bg(floor_color_name, top_color)
+        safe_addch(screen, py, px, ch, trunk_attr, clip_borders=True)
+
+
+
+# File: pygame_utils.py
+# version: 1.3 (updated for full screen, larger font, dynamic resizing, edge-to-edge ASCII,
+# and added terminal size support using shutil)
+#
+# Summary: Provides safe pygame output helpers, color attribute assembly,
+#          and (for compatibility with curses) terminal size via shutil.
+#
+# Tags: pygame, utils
+
+import pygame
+import shutil
+from typing import Tuple
+from .pygame_color_init import color_pairs
+
+# Initialize pygame's font system.
+pygame.font.init()
+
+# Use a larger default font size (e.g., 36 instead of 24)
+DEFAULT_FONT = pygame.font.Font(None, 36)
+CELL_WIDTH, CELL_HEIGHT = DEFAULT_FONT.size("W")
+
+def update_cell_sizes(screen, font_size=36):
+    """
+    Update the global DEFAULT_FONT and cell dimensions based on the new font size.
+    This is called upon window resize.
+    """
+    global DEFAULT_FONT, CELL_WIDTH, CELL_HEIGHT
+    DEFAULT_FONT = pygame.font.Font(None, font_size)
+    CELL_WIDTH, CELL_HEIGHT = DEFAULT_FONT.size("W")
+
+def get_color_attr(color_name: str, bold: bool = False, blink: bool = False, underline: bool = False):
+    """
+    Given a color name like "white_on_black", returns the foreground RGB color tuple.
+    Bold, blink, and underline flags are ignored in this implementation.
+    """
+    pair = color_pairs.get(color_name, ((255, 255, 255), (0, 0, 0)))
+    return pair[0]
+
+def parse_two_color_names(fg_bg: str) -> Tuple[str, str]:
+    """
+    Splits a string like "white_on_blue" into ("white", "blue").
+    If invalid, returns ("white", "black").
+    """
+    parts = fg_bg.split("_on_")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return ("white", "black")
+
+def _clip_coords_for_borders(row: int, col: int, max_h: int, max_w: int) -> Tuple[int, int]:
+    """
+    Updated to allow edge-to-edge ASCII (i.e. no extra border margin).
+    Legacy clipping code (deprecated):
+    # if row < 1 or row > (max_h - 2):
+    #     return -1, -1
+    """
+    if row < 0 or row >= max_h:
+        return -1, -1
+    if col < 0 or col >= max_w:
+        return -1, -1
+    return row, col
+
+def _truncate_for_borders_text(col: int, text: str, max_w: int) -> str:
+    """
+    Updated to allow full width text (edge-to-edge).
+    """
+    available_width = max_w - col
+    if available_width < 1:
+        return ""
+    return text[:available_width]
+
+def safe_addstr(screen, row: int, col: int, text: str, color, clip_borders: bool = True) -> None:
+    """
+    Safely adds a string at grid position (row, col) on the given pygame Surface.
+    """
+    width, height = screen.get_size()
+    grid_cols = width // CELL_WIDTH
+    grid_rows = height // CELL_HEIGHT
+
+    if clip_borders:
+        row, col = _clip_coords_for_borders(row, col, grid_rows, grid_cols)
+        if row < 0 or col < 0:
+            return
+        text = _truncate_for_borders_text(col, text, grid_cols)
+        if not text:
+            return
+    else:
+        if row < 0 or row >= grid_rows:
+            return
+        if col < 0 or col >= grid_cols:
+            return
+        available_width = grid_cols - col
+        if available_width < 1:
+            return
+        text = text[:available_width]
+
+    try:
+        text_surface = DEFAULT_FONT.render(text, True, color)
+        screen.blit(text_surface, (col * CELL_WIDTH, row * CELL_HEIGHT))
+    except Exception:
+        pass
+
+def safe_addch(screen, row: int, col: int, ch, color, clip_borders: bool = True) -> None:
+    """
+    Safely adds a single character at grid position (row, col) on the given pygame Surface.
+    """
+    width, height = screen.get_size()
+    grid_cols = width // CELL_WIDTH
+    grid_rows = height // CELL_HEIGHT
+
+    if clip_borders:
+        row, col = _clip_coords_for_borders(row, col, grid_rows, grid_cols)
+        if row < 0 or col < 0:
+            return
+    else:
+        if row < 0 or row >= grid_rows:
+            return
+        if col < 0 or col >= grid_cols:
+            return
+
+    try:
+        ch_str = str(ch)
+        text_surface = DEFAULT_FONT.render(ch_str, True, color)
+        screen.blit(text_surface, (col * CELL_WIDTH, row * CELL_HEIGHT))
+    except Exception:
+        pass
+
+def draw_inside_frame_ch(screen, row: int, col: int, ch, color) -> None:
+    """
+    Draws a single character if (row, col) is inside the visible grid.
+    (Removed extra border restrictions for edge-to-edge ASCII.)
+    """
+    width, height = screen.get_size()
+    grid_cols = width // CELL_WIDTH
+    grid_rows = height // CELL_HEIGHT
+    if 0 <= row < grid_rows and 0 <= col < grid_cols:
+        safe_addch(screen, row, col, ch, color, clip_borders=True)
+
+def get_terminal_size():
+    """
+    For compatibility with curses: return the terminal size as (columns, lines)
+    using shutil.get_terminal_size(). This is not used for actual pygame layout,
+    but may be useful for logging or fallback behavior.
+    """
+    try:
+        ts = shutil.get_terminal_size()
+        return (ts.columns, ts.lines)
+    except Exception:
+        return (80, 24)
+
+
+# FileName: where_pygame_art_lives.py
+#
+# version: 1.2
+#
+# Summary: Stores ASCII art or special graphics needed for titles, load screens,
+#          or decorative UI elements. Replace the placeholders with your own artwork.
+#
+# Tags: art, ui
+
+HEADER_ART = [
+    "=== HEADER ART PLACEHOLDER ===",
+    "You can replace this with your own artwork."
+]
+
+LOADING_ART = [
+    "--- LOADING ART PLACEHOLDER ---",
+    "You can replace this with your own artwork."
+]
+
+HOMESCREEN_ART = [
+    "::: HOMESCREEN ART PLACEHOLDER :::",
+    "You can replace this with your own artwork."
+]
+
+DECORATION = [
+    "... DECORATION PLACEHOLDER ...",
+    "You can replace this with your own artwork."
+]
+
+BANNER = [
+    "~~~ BANNER PLACEHOLDER ~~~"
+]
+
+BORDERS = [
+    "+++ BORDERS PLACEHOLDER +++"
+]
+
+MAIN_MENU_ART = [
+    "     .       +  ':.  .      *              '            *  '",
+    "                  '::._                                      ",
+    "                    '._)                 * +              ' ",
+    "                          .              .        |         ",
+    "           .      o.               +            - o -.      ",
+    " o'          '    .    /  .         o             |         ",
+    "    .  *   '          /                         +           ",
+    "   .                 *          '                      .    ",
+    "                 .             .             .  .           ",
+    "   *         .   .       .                   | '.           ",
+    "  +          '+                .           - o -            ",
+    "          .                                . |              ",
+    "            '  '     ..                   +  .  . +.        ",
+    "  .                              |          .-.             ",
+    " '                 .'  * '     - o -         ) )            ",
+    " +        '   .                   |          '-´         '  ",
+    "                       +      .'                   '.       ",
+    " .           .           o      .       . .      .          ",
+    "                       '       . +~~                       .",
+]
+
+CROCODILE = [
+    "                _ ___                /^^\\ /^\\  /^^\\*",
+    "    _          *@)@) \\            ,,/ '`~`'~~ ', `\\.",
+    "  _/o\\_ _ _ _/~`.`...'~\\        ./~~..,'`','',.,' '  ~:",
+    " / `','.~,~.~  .   , . , ~|,   ,/ .,' , ,. .. ,,.   `,  ~\\*",
+    "( ' *' _ '*`_  '  .    ,`\\*/ .' ..' '  `  `   `..  `,   \\*",
+    "  V~ V~ V~ ~\\ `   ' .  '    , ' .,.,''`.,.''`.,.``. ',   \\_",
+    "  _/\\ /\\ /\\ /\\_/, . ' ,   `*/\\_ `. `. '.,  \\*",
+    "< ~ ~ '~`'~'`, .,  .   `_: ::: \\_ '      `*/ ::: \\_ `.,' . ',  \\_",
+    "  \\ ' `_  '`_    _    ',/ _::_::_ \\ _    _/ _::_::_ \\   `.,'.,`., \\-,-,-,_,_,",
+    "   `'~~ `'~~ `'~~ `'~~  \\_)(_)(_)/  `~~' \\_)(*)(*)/ ~'`\\*..*,.*,'*;*;*;*;*;"
+]
+
+
+
+# FileName: where_pygame_input_lives.py
+# version: 2.4
+#
+# Summary: A pygame-based front-end implementing IGameInput for user interaction.
+#          Processes pygame events to return a list of action strings like
+#          ["MOVE_UP", "QUIT", "INTERACT", etc.]. Note that only 'q'/ESC quits,
+#          and 'i' or 'I' maps to SHOW_INVENTORY.
+#
+# Tags: pygame, ui, rendering
+
+import pygame
+from engine.engine_interfaces import IGameInput
+
+class PygameGameInput(IGameInput):
+    """
+    Implements IGameInput for pygame. The get_actions() method processes pygame events,
+    returning a list of action strings like ["MOVE_UP", "QUIT", "INTERACT", etc.].
+    """
+
+    def __init__(self):
+        # Optionally, enable key repeat (parameters can be adjusted as needed)
+        pygame.key.set_repeat(1, 10)
+        # Hide the mouse cursor for a cleaner UI
+        pygame.mouse.set_visible(False)
+
+    def get_actions(self):
+        actions = []
+        # Process events from the pygame event queue
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                actions.append("QUIT")
+            elif event.type == pygame.KEYDOWN:
+                act = self._interpret_key(event.key)
+                if act:
+                    actions.append(act)
+        return actions
+
+    def _interpret_key(self, key):
+        # Quit => q, or ESC
+        if key in (pygame.K_q, pygame.K_ESCAPE):
+            return "QUIT"
+
+        # Movement
+        if key in (pygame.K_w, pygame.K_UP):
+            return "MOVE_UP"
+        if key in (pygame.K_s, pygame.K_DOWN):
+            return "MOVE_DOWN"
+        if key in (pygame.K_a, pygame.K_LEFT):
+            return "MOVE_LEFT"
+        if key in (pygame.K_d, pygame.K_RIGHT):
+            return "MOVE_RIGHT"
+
+        # Editor toggle
+        if key == pygame.K_e:
+            return "EDITOR_TOGGLE"
+
+        # Quick-save
+        if key == pygame.K_o:
+            return "SAVE_QUICK"
+
+        # Debug
+        if key == pygame.K_v:
+            return "DEBUG_TOGGLE"
+
+        # Interact (space bar)
+        if key == pygame.K_SPACE:
+            return "INTERACT"
+
+        # Editor keys
+        if key == pygame.K_p:
+            return "PLACE_ITEM"
+        if key == pygame.K_x:
+            return "REMOVE_TOP"
+        if key == pygame.K_u:
+            return "UNDO"
+        if key == pygame.K_l:
+            return "NEXT_ITEM"
+        if key == pygame.K_k:
+            return "PREV_ITEM"
+
+        # Show Inventory
+        if key == pygame.K_i:
+            return "SHOW_INVENTORY"
+
+        return None
+
+
+
+# FileName: where_pygame_themes_lives.py
+#
+# version: 1.1
+#
+# Summary: Holds multiple named theme definitions (colors and ASCII art).
+#          Provides a global CURRENT_THEME for the rest of the UI.
+#
+# Tags: themes, pygame
+
+from .where_pygame_art_lives import (
+    HEADER_ART,
+    LOADING_ART,
+    HOMESCREEN_ART,
+    DECORATION,
+    BANNER,
+    BORDERS,
+    MAIN_MENU_ART,
+    CROCODILE
+)
+
+THEMES = {
+    "default": {
+        "border_color":              "blue_on_black",
+        "title_color":               "green_on_black",
+        "instructions_color":        "white_on_black",
+        "text_color":                "white_on_black",
+        "ascii_art_color":           "magenta_on_black",
+
+        "highlight_selected_color":  "yellow_on_black",
+        "highlight_unselected_color": "white_on_black",
+
+        # Added keys to handle previously hard-coded colors:
+        "prompt_color":        "cyan_on_black",
+        "menu_item_color":     "yellow_on_black",
+        "confirmation_color":  "white_on_black",
+
+        "header_art":      HEADER_ART,
+        "loading_art":     LOADING_ART,
+        "homescreen_art":  HOMESCREEN_ART,
+        "decoration_art":  DECORATION,
+        "banner_art":      BANNER,
+        "borders_art":     BORDERS,
+        "main_menu_art":   MAIN_MENU_ART,
+        "crocodile_art":   CROCODILE,
+    },
+
+    "dark": {
+        "border_color":              "magenta_on_black",
+        "title_color":               "white_on_blue",
+        "instructions_color":        "cyan_on_black",
+        "text_color":                "yellow_on_black",
+        "ascii_art_color":           "white_on_black",
+
+        "highlight_selected_color":  "yellow_on_black",
+        "highlight_unselected_color": "white_on_black",
+
+        # Same added keys for a consistent dictionary:
+        "prompt_color":        "magenta_on_black",
+        "menu_item_color":     "yellow_on_black",
+        "confirmation_color":  "white_on_black",
+
+        "header_art":      HEADER_ART,
+        "loading_art":     LOADING_ART,
+        "homescreen_art":  HOMESCREEN_ART,
+        "decoration_art":  DECORATION,
+        "banner_art":      BANNER,
+        "borders_art":     BORDERS,
+        "main_menu_art":   MAIN_MENU_ART,
+        "crocodile_art":   CROCODILE,
+    },
+}
+
+CURRENT_THEME = THEMES["default"]
+
+def set_theme(theme_name: str):
+    """
+    Switch the global CURRENT_THEME to a different named theme.
+    Falls back to 'default' if not found.
+    """
+    global CURRENT_THEME
+    if theme_name in THEMES:
+        CURRENT_THEME = THEMES[theme_name]
+    else:
+        CURRENT_THEME = THEMES["default"]
+
+

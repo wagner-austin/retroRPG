@@ -1,3 +1,11 @@
+# FileName: layer_presets.py
+
+# version 1.1
+
+# Summary: Draws base erase layer and frame art layer
+
+# Tags: art, base, erase
+
 from .scene_layer_base import SceneLayer
 from .where_curses_themes_lives import CURRENT_THEME
 from .curses_common import draw_screen_frame, _draw_art
